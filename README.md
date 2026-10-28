@@ -1,6 +1,6 @@
 # Rubbi frontend
 
-Next.js 16 app for [Rubbi](https://github.com/RubbiLabs) on Stellar: fund a USDC balance, pay subscriptions, run payroll and spend through a virtual card. It talks to the Rubbi API (`RL-api`) over REST with a SEP-10 JWT and to the Soroban contracts (`RL-smart-contracts`) through the user's own wallet.
+Next.js 16 app for [Rubbi](https://github.com/RubbiLabs) on Stellar: fund a USDC balance, pay subscriptions, run payroll and spend through a virtual card. It talks to the Rubbi API ([RL-api](https://github.com/RubbiLabs/RL-api)) over REST with a SEP-10 JWT and to the Soroban contracts ([RL-smart-contracts](https://github.com/RubbiLabs/RL-smart-contracts)) through the user's own wallet. The product runs on **Stellar testnet** today; cards come from a mock issuer and carry a MOCK badge.
 
 ```
 browser ──(Stellar Wallets Kit: sign)──▶ Soroban contracts (vault, subscriptions, payroll, USDC SAC)
@@ -27,7 +27,7 @@ Ports: the frontend runs on **3001** (`dev` and `start` scripts) and the API on 
 | `NEXT_PUBLIC_USDC_SAC_ID`, `NEXT_PUBLIC_VAULT_CONTRACT_ID`, `NEXT_PUBLIC_SUBSCRIPTIONS_CONTRACT_ID`, `NEXT_PUBLIC_PAYROLL_CONTRACT_ID` | no | override the ids from `GET /stellar/config` |
 | `NEXT_PUBLIC_USDC_ISSUER` | no | classic USDC issuer for the trustline; resolved from the SAC's `name()` when unset |
 
-Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:errors` (compares `lib/stellar/errors.ts` with the contracts' `errors.rs`; skipped when `../RL-smart-contracts` is absent).
+Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:errors` (compares `lib/stellar/errors.ts` with the contracts' `errors.rs`; skipped when `../RL-smart-contracts` is absent). CI (`.github/workflows/ci.yml`) runs the same four on every push and pull request.
 
 ## Flows
 
@@ -59,3 +59,15 @@ Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:er
 ## Amounts
 
 Contract amounts are `i128` stroops (USDC has 7 decimals). The UI parses user input with a strict decimal regex, converts with `bigint`, and formats back with string arithmetic. API amounts are decimal strings and are parsed the same way.
+
+## Contributing via Drips Wave
+
+Rubbi takes part in the Stellar Wave programme on [Drips](https://www.drips.network/): issues labelled **`Stellar Wave`** are scoped, paid tasks open to outside contributors. Each one states its Context, Scope, Acceptance criteria and Complexity (Trivial / Medium / High). Comment on an issue to claim it, wait for a maintainer to assign it, then open a pull request that closes it with every acceptance criterion met and all checks green. One claimed issue per contributor at a time.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the setup, the branch and Conventional Commit rules, the pull request checklist, test expectations and the AI-assistance policy (tools are fine; you must understand, test and be able to explain every line, and low-effort generated pull requests are closed). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately per [SECURITY.md](SECURITY.md), never in a public issue.
+
+Related repositories: [RL-smart-contracts](https://github.com/RubbiLabs/RL-smart-contracts) (Soroban contracts) and [RL-api](https://github.com/RubbiLabs/RL-api) (backend) use the same conventions and have their own Wave issues.
+
+## License
+
+[MIT](LICENSE).
