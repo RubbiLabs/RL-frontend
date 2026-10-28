@@ -1,468 +1,214 @@
 "use client";
+import React, { useState } from "react";
+import { ArrowDownRight, ArrowUpRight, CheckCircle, Droplets, ExternalLink, ShieldCheck } from "lucide-react";
 
-import React, { useEffect, useState } from "react";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  CheckCircle,
-  Droplets,
-  RefreshCw,
-  ArrowLeftRight,
-  FileText,
-  X,
-  ExternalLink,
-} from "lucide-react";
+import { TransactionRow } from "@/app/dashboard/page";
+import AmountInput from "@/components/ui/AmountInput";
 import Button from "@/components/ui/Button";
-import Modal from "@/components/ui/Modal";
-import { useWallet } from "@/context/WalletContext";
-import { useToast } from "@/context/ToastContext";
-import { useNetworkSwitch } from "@/hooks/useNetworkSwitch";
-import { useModalContract } from "@/hooks/useContracts";
-import { useContractWrite } from "@/hooks/useContractWrite";
-import { useZeroDev } from "@/context/ZeroDevContext";
-import { useAccount, useReadContract } from "wagmi";
-import RubbiTokenABI from "@/Abis/RubbiToken.json";
-import ERC20ABI from "@/Abis/ERC20.json";
-import { trackTransaction } from "@/components/dashboard/DuneAnalytics";
-
-const RUB_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_RUBBI_TOKEN_ADDRESS as `0x${string}`;
-const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
-
-interface WalletActivity {
-  id: string;
-  type: "faucet" | "deposit" | "withdraw" | "swap" | "subscription" | "stream";
-  label: string;
-  amount: string;
-  positive: boolean;
-  timestamp: Date;
-  txHash?: string;
-  details: string;
-  status: "completed" | "pending" | "failed";
-}
-
-function ActivityTypeIcon({ type }: { type: string }) {
-  const iconClass = "w-4 h-4";
-  if (type === "faucet")
-    return <Droplets className={iconClass} />;
-  if (type === "deposit")
-    return <ArrowDownRight className={iconClass} />;
-  if (type === "withdraw")
-    return <ArrowUpRight className={iconClass} />;
-  if (type === "swap")
-    return <ArrowLeftRight className={iconClass} />;
-  if (type === "stream")
-    return <RefreshCw className={iconClass} />;
-  return <FileText className={iconClass} />;
-}
-
-function activityTypeColor(type: string) {
-  if (type === "faucet") return "bg-primary/10 text-primary";
-  if (type === "deposit") return "bg-blue-100 text-blue-600";
-  if (type === "withdraw") return "bg-orange-100 text-orange-600";
-  if (type === "swap") return "bg-green-100 text-green-600";
-  if (type === "stream") return "bg-purple-100 text-purple-600";
-  return "bg-neutral-100 text-neutral-500";
-}
-
-function statusBadge(status: string) {
-  if (status === "completed") return "bg-green-100 text-green-700";
-  if (status === "pending") return "bg-yellow-100 text-yellow-700";
-  return "bg-red-100 text-red-700";
-}
-
-function formatTimeAgo(date: Date): string {
-  const now = Date.now();
-  const diff = now - date.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
+import SectionCard, { EmptyState } from "@/components/ui/SectionCard";
+import { useStellarWallet } from "@/context/StellarWalletContext";
+import { useInvalidateAfterTx, useMe, useTransactions } from "@/hooks/useApi";
+import { useAccountState, useUsdcAsset, useVaultBalance } from "@/hooks/useChain";
+import { useStellarTx } from "@/hooks/useStellarTx";
+import { enableUsdcTrustline } from "@/lib/stellar/account";
+import { formatUsdc, formatUsdcDecimal, formatXlm, parseUsdc, tryParseUsdc } from "@/lib/stellar/amount";
+import { CIRCLE_FAUCET_URL, explorerAccountUrl, friendbotUrl, stellarLabFundUrl } from "@/lib/stellar/config";
+import { depositToVault, withdrawFromVault } from "@/lib/stellar/vault";
 
 export default function WalletPage() {
-  const { rubBalance, setRubBalance, address } = useWallet();
-  const { success, error, info } = useToast();
-  const { isCorrectNetwork, isConnected, switchToArbitrum } = useNetworkSwitch();
-  const { balance: modalBalance, depositFunds, refetchBalance } = useModalContract();
-  const { isConnected: wagmiConnected } = useAccount();
-  const { execute, isWriting } = useContractWrite();
-  const { isReady: isZeroDevReady, isLoading: isZeroDevLoading, error: zeroDevError, smartAccountAddress } = useZeroDev();
+  const { address, config } = useStellarWallet();
+  const asset = useUsdcAsset();
+  const account = useAccountState();
+  const vault = useVaultBalance();
+  const me = useMe();
+  const walletTxs = useTransactions({ account: "WALLET", pageSize: 10 });
+  const tx = useStellarTx();
+  const invalidate = useInvalidateAfterTx();
 
-  const [claimLoading, setClaimLoading] = useState(false);
-  const [depositModal, setDepositModal] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
-  const [depositLoading, setDepositLoading] = useState(false);
-  const [activities, setActivities] = useState<WalletActivity[]>([]);
-  const [selectedActivity, setSelectedActivity] = useState<WalletActivity | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
 
-  const { data: onChainRubBalance, refetch: refetchRubBalance } = useReadContract({
-    address: RUB_TOKEN_ADDRESS,
-    abi: ERC20ABI.abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!RUB_TOKEN_ADDRESS && wagmiConnected },
-  });
+  const isTestnet = config?.network === "testnet";
+  const state = account.data;
+  const usdcWallet = state?.usdc.hasTrustline ? state.usdc.balance : 0n;
 
-  useEffect(() => {
-    if (onChainRubBalance !== undefined) {
-      const onChainBal = (Number(onChainRubBalance) / 1e18).toFixed(2);
-      if (Number(onChainBal) > 0) {
-        setRubBalance(onChainBal);
-      }
-    }
-  }, [onChainRubBalance, setRubBalance]);
-
-  const { data: faucetClaimCount } = useReadContract({
-    address: RUB_TOKEN_ADDRESS,
-    abi: RubbiTokenABI.abi,
-    functionName: "faucetClaimCount",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!RUB_TOKEN_ADDRESS },
-  });
-
-  const CLAIM_LIMIT = 3;
-  const CLAIM_AMOUNT = 100;
-  const claimCount = faucetClaimCount ? Number(faucetClaimCount) : 0;
-  const claimsRemaining = Math.max(0, CLAIM_LIMIT - claimCount);
-  const balance = Number(rubBalance || 0);
-
-  const addActivity = (activity: Omit<WalletActivity, "id" | "timestamp">) => {
-    setActivities((prev) => [
-      { ...activity, id: Date.now().toString(), timestamp: new Date() },
-      ...prev,
-    ]);
+  const refreshChain = () => {
+    void account.refetch();
+    void vault.refetch();
+    invalidate([["me", address], ["transactions", address]]);
   };
 
-  const handleClaim = async () => {
-    if (!address) {
-      error("Wallet Required", "Connect your wallet to claim RUBBI.");
-      return;
-    }
-    if (!isCorrectNetwork) {
-      error("Wrong Network", "Please switch to Arbitrum Sepolia.");
-      return;
-    }
-    if (claimsRemaining <= 0) {
-      error("No Claims Remaining", "All 3 lifetime faucet claims used.");
-      return;
-    }
-
-    setClaimLoading(true);
-    info("Claiming Faucet...", "Broadcasting transaction...");
-
-    const txHash = await execute({
-      abi: RubbiTokenABI.abi as any,
-      address: RUB_TOKEN_ADDRESS,
-      functionName: "claimFaucet",
-      backendSync: {
-        endpoint: "faucet.claim",
-        params: {},
-      },
-      onSuccess: (hash) => {
-        const newCount = claimCount + 1;
-        const newBalance = balance + CLAIM_AMOUNT;
-        setRubBalance(String(newBalance));
-        trackTransaction();
-        addActivity({
-          type: "faucet",
-          label: "Faucet Claim",
-          amount: `+${CLAIM_AMOUNT}.00`,
-          positive: true,
-          txHash: hash,
-          details: `Claimed ${CLAIM_AMOUNT} RUB from the faucet. ${Math.max(0, CLAIM_LIMIT - newCount)} claims remaining out of ${CLAIM_LIMIT} lifetime limit.`,
-          status: "completed",
-        });
-        success(
-          `${CLAIM_AMOUNT} RUBBI Claimed!`,
-          `${Math.max(0, CLAIM_LIMIT - newCount)} claims remaining.`
-        );
-        setTimeout(() => refetchRubBalance(), 2000);
-      },
-    });
-
-    setClaimLoading(false);
+  const handleEnableUsdc = async () => {
+    if (!asset.data) return;
+    const result = await tx.run(
+      { title: "Enable USDC", description: "Adds a USDC trustline to your Stellar account.", successTitle: "USDC enabled" },
+      ({ config: cfg, address: addr, sign }) => enableUsdcTrustline(cfg, asset.data!, { source: addr, sign }),
+    );
+    if (result) refreshChain();
   };
 
   const handleDeposit = async () => {
-    const amount = Number(depositAmount);
-
-    if (!address) {
-      error("Wallet Required", "Connect your wallet before depositing.");
-      return;
+    const amount = tryParseUsdc(depositAmount);
+    if (!amount) return;
+    const result = await tx.run(
+      { title: "Deposit to Rubbi wallet", description: `Moving ${formatUsdc(amount)} USDC into the vault.`, successTitle: "Deposit confirmed" },
+      ({ config: cfg, address: addr, sign }) => depositToVault(cfg, { user: addr, amount }, { sign }),
+    );
+    if (result) {
+      setDepositAmount("");
+      refreshChain();
     }
-    if (!isCorrectNetwork) {
-      error("Wrong Network", "Please switch to Arbitrum Sepolia.");
-      return;
-    }
-    if (!amount || amount <= 0) {
-      error("Invalid Amount", "Enter a valid RUB amount to deposit.");
-      return;
-    }
-
-    setDepositLoading(true);
-    const amountBigInt = BigInt(Math.floor(amount * 1e18));
-
-    await depositFunds(amountBigInt);
-
-    addActivity({
-      type: "deposit",
-      label: "Deposited to Contract",
-      amount: `-${amount.toFixed(2)}`,
-      positive: false,
-      details: `Deposited ${amount.toFixed(2)} RUB to ModalContract for subscription payments.`,
-      status: "completed",
-    });
-
-    setDepositModal(false);
-    setDepositAmount("");
-    setDepositLoading(false);
   };
 
+  const handleWithdraw = async () => {
+    const amount = tryParseUsdc(withdrawAmount);
+    if (!amount) return;
+    const result = await tx.run(
+      { title: "Withdraw from Rubbi wallet", description: `Moving ${formatUsdc(amount)} USDC back to your wallet.`, successTitle: "Withdrawal confirmed" },
+      ({ config: cfg, address: addr, sign }) => withdrawFromVault(cfg, { user: addr, amount }, { sign }),
+    );
+    if (result) {
+      setWithdrawAmount("");
+      refreshChain();
+    }
+  };
+
+  const canDeposit = Boolean(state?.usdc.hasTrustline) && tryParseUsdc(depositAmount) !== null && parseUsdc(depositAmount || "0") <= usdcWallet;
+  const canWithdraw = tryParseUsdc(withdrawAmount) !== null && vault.data !== undefined && parseUsdc(withdrawAmount || "0") <= vault.data;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <div>
-        <h1 className="text-2xl font-extrabold text-neutral-900">Wallet</h1>
-        <p className="text-sm text-neutral-500 mt-1">Manage your RUB token balance</p>
+        <h1 className="text-2xl lg:text-3xl font-extrabold text-neutral-900">Wallet</h1>
+        <p className="text-sm text-neutral-500 mt-1">
+          Your Stellar account, the USDC trustline and your Rubbi wallet (the on-chain vault that funds your card).
+        </p>
       </div>
 
-      {isZeroDevLoading && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
-          <p className="text-xs text-blue-700">Initializing smart account for gasless transactions...</p>
-        </div>
-      )}
-      {isZeroDevReady && smartAccountAddress && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
-          <CheckCircle size={14} className="text-green-600" />
-          <p className="text-xs text-green-700">
-            Gasless transactions active. Smart account: {smartAccountAddress.slice(0, 6)}...{smartAccountAddress.slice(-4)}
-          </p>
-        </div>
-      )}
-      {zeroDevError && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
-          <p className="text-xs text-amber-700">
-            ZeroDev unavailable (using standard transactions). Error: {zeroDevError.slice(0, 80)}
-          </p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-neutral-200 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">RUB Balance</p>
-          <p className="text-2xl font-extrabold text-primary mt-1">{balance.toFixed(2)}</p>
-          <p className="text-xs text-neutral-400 mt-0.5">≈ ${(balance / 50).toFixed(2)} USD</p>
-        </div>
-        <div className="bg-white rounded-xl border border-neutral-200 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">ModalContract</p>
-          <p className="text-2xl font-extrabold text-primary mt-1">{Number(modalBalance || 0).toFixed(2)}</p>
-          <p className="text-xs text-neutral-400 mt-0.5">Available for subscriptions</p>
-        </div>
-        <div className="bg-white rounded-xl border border-neutral-200 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">Faucet Claims</p>
-          <p className="text-2xl font-extrabold text-primary mt-1">{claimsRemaining}</p>
-          <p className="text-xs text-neutral-400 mt-0.5">{CLAIM_AMOUNT} RUB per claim</p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Button
-          onClick={handleClaim}
-          loading={claimLoading || isWriting}
-          disabled={claimsRemaining <= 0}
-          icon={<Droplets size={16} />}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <SectionCard
+          title="Stellar account"
+          subtitle={address ?? ""}
+          action={
+            address && config ? (
+              <a
+                href={explorerAccountUrl(config, address)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary inline-flex items-center gap-1 hover:underline"
+              >
+                stellar.expert <ExternalLink size={11} />
+              </a>
+            ) : null
+          }
         >
-          {claimsRemaining <= 0 ? "No Claims Remaining" : `Claim ${CLAIM_AMOUNT} RUBBI`}
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => setDepositModal(true)}
-          icon={<ArrowDownRight size={16} />}
-        >
-          Deposit to Contract
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-swap-modal"))}
-          icon={<ArrowLeftRight size={16} />}
-        >
-          Swap Assets
-        </Button>
-      </div>
-
-      {/* Activity Table */}
-      <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-neutral-100">
-          <h2 className="text-lg font-bold text-neutral-900">Activity</h2>
-        </div>
-
-        {activities.length === 0 ? (
-          <div className="px-5 py-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-4">
-              <FileText size={24} className="text-neutral-300" />
-            </div>
-            <h3 className="text-base font-bold text-neutral-900 mb-1">No Activity Yet</h3>
-            <p className="text-sm text-neutral-500 max-w-sm mx-auto">
-              Your wallet activity will appear here. Start by claiming faucet tokens, depositing funds, or swapping assets.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-neutral-100">
-                  <th className="text-left text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-5 py-3">Type</th>
-                  <th className="text-left text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-5 py-3">Description</th>
-                  <th className="text-right text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-5 py-3">Amount</th>
-                  <th className="text-center text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-5 py-3">Status</th>
-                  <th className="text-right text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-5 py-3">Time</th>
-                  <th className="text-right text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-5 py-3 w-8"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {activities.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-b border-neutral-50 hover:bg-neutral-50/50 cursor-pointer transition-colors"
-                    onClick={() => setSelectedActivity(item)}
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activityTypeColor(item.type)}`}>
-                        <ActivityTypeIcon type={item.type} />
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <p className="text-sm font-semibold text-neutral-900">{item.label}</p>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <span className={`text-sm font-bold ${item.positive ? "text-green-600" : "text-neutral-900"}`}>
-                        {item.amount} RUB
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${statusBadge(item.status)}`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <span className="text-xs text-neutral-400">{formatTimeAgo(item.timestamp)}</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <FileText size={14} className="text-neutral-300 inline" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Activity Detail Modal */}
-      <Modal
-        open={!!selectedActivity}
-        onClose={() => setSelectedActivity(null)}
-        title="Activity Details"
-        subtitle={selectedActivity?.label}
-        size="md"
-      >
-        {selectedActivity && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${activityTypeColor(selectedActivity.type)}`}>
-                <ActivityTypeIcon type={selectedActivity.type} />
-              </div>
-              <div>
-                <p className="font-bold text-neutral-900">{selectedActivity.label}</p>
-                <p className="text-xs text-neutral-500 capitalize">{selectedActivity.type} transaction</p>
-              </div>
-            </div>
-
-            <div className="bg-neutral-50 rounded-xl p-4 space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-neutral-500">Amount</span>
-                <span className={`text-sm font-bold ${selectedActivity.positive ? "text-green-600" : "text-neutral-900"}`}>
-                  {selectedActivity.amount} RUB
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-neutral-500">Status</span>
-                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${statusBadge(selectedActivity.status)}`}>
-                  {selectedActivity.status}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-neutral-500">Time</span>
-                <span className="text-sm font-bold text-neutral-900">
-                  {selectedActivity.timestamp.toLocaleString()}
-                </span>
-              </div>
-              {selectedActivity.txHash && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500">Transaction</span>
-                  <a
-                    href={`https://sepolia.arbiscan.io/tx/${selectedActivity.txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-mono text-primary hover:underline flex items-center gap-1"
-                  >
-                    {selectedActivity.txHash.slice(0, 10)}...{selectedActivity.txHash.slice(-8)}
-                    <ExternalLink size={10} />
+          {account.isLoading && <p className="text-sm text-neutral-400">Reading the ledger…</p>}
+          {account.isError && <p className="text-sm text-red-600">Could not read your account from the RPC.</p>}
+          {state && !state.exists && (
+            <div className="space-y-3">
+              <p className="text-sm text-neutral-700 font-semibold">This account is not funded yet.</p>
+              <p className="text-xs text-neutral-500">
+                A Stellar account needs a small XLM balance before it can hold USDC or sign transactions.
+              </p>
+              {isTestnet && address && (
+                <div className="flex flex-wrap gap-2">
+                  <a href={friendbotUrl(address)} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" icon={<Droplets size={14} />}>Fund with Friendbot</Button>
                   </a>
+                  <a href={stellarLabFundUrl(address)} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outlined">Stellar Lab</Button>
+                  </a>
+                  <Button size="sm" variant="ghost" onClick={() => void account.refetch()}>
+                    Re-check
+                  </Button>
                 </div>
               )}
             </div>
+          )}
+          {state?.exists && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-neutral-50 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">XLM</p>
+                  <p className="text-lg font-extrabold text-neutral-900">{formatXlm(state.xlmStroops)}</p>
+                </div>
+                <div className="rounded-xl bg-neutral-50 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">USDC in wallet</p>
+                  <p className="text-lg font-extrabold text-neutral-900">
+                    {state.usdc.hasTrustline ? formatUsdc(state.usdc.balance) : "—"}
+                  </p>
+                </div>
+              </div>
 
-            <div className="bg-primary/5 border border-primary/10 rounded-xl p-4">
-              <p className="text-sm text-neutral-600 leading-relaxed">{selectedActivity.details}</p>
+              {state.usdc.hasTrustline ? (
+                <div className="flex items-center gap-2 text-sm text-green-700">
+                  <ShieldCheck size={16} /> USDC trustline enabled
+                  {!state.usdc.authorized && <span className="text-xs text-red-600">(frozen by the issuer)</span>}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-amber-900">USDC is not enabled on this account</p>
+                  <p className="text-xs text-amber-800">
+                    Stellar accounts opt in to each asset. One signature adds the USDC trustline
+                    {asset.data ? ` (issuer ${asset.data.getIssuer()?.slice(0, 6)}…)` : ""}.
+                  </p>
+                  <Button size="sm" icon={<CheckCircle size={14} />} loading={tx.isRunning} disabled={!asset.data} onClick={handleEnableUsdc}>
+                    Enable USDC
+                  </Button>
+                </div>
+              )}
+
+              {isTestnet && (
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <a href={CIRCLE_FAUCET_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                    Get testnet USDC from Circle&apos;s faucet <ExternalLink size={11} />
+                  </a>
+                  {address && (
+                    <a href={friendbotUrl(address)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                      Get testnet XLM (Friendbot) <ExternalLink size={11} />
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
+          )}
+        </SectionCard>
 
-            <Button
-              size="lg"
-              fullWidth
-              variant="ghost"
-              onClick={() => setSelectedActivity(null)}
-            >
-              Close
-            </Button>
+        <SectionCard title="Rubbi wallet (vault)" subtitle="Withdrawable at any time, even while the vault is paused">
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="rounded-xl bg-primary text-white px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">On-chain balance</p>
+              <p className="text-lg font-extrabold">{vault.data !== undefined ? formatUsdc(vault.data) : "—"}</p>
+            </div>
+            <div className="rounded-xl bg-neutral-50 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Rubbi mirror</p>
+              <p className="text-lg font-extrabold text-neutral-900">{me.data ? formatUsdcDecimal(me.data.walletBalance) : "—"}</p>
+              <p className="text-[10px] text-neutral-400">updates when the indexer sees your deposit</p>
+            </div>
           </div>
-        )}
-      </Modal>
 
-      {depositModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md animate-scaleIn">
-            <h3 className="text-lg font-bold text-neutral-900 mb-4">Deposit to Contract</h3>
-            <p className="text-sm text-neutral-500 mb-4">
-              Transfer RUB tokens to ModalContract for subscription payments.
-            </p>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              placeholder="Amount in RUB"
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-primary mb-4"
-            />
-            <div className="flex gap-3">
-              <Button variant="ghost" onClick={() => setDepositModal(false)}>
-                Cancel
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <AmountInput label="Deposit" value={depositAmount} onChange={setDepositAmount} max={state?.usdc.hasTrustline ? usdcWallet : null} />
+              <Button fullWidth icon={<ArrowDownRight size={15} />} disabled={!canDeposit || tx.isRunning} onClick={handleDeposit}>
+                Deposit USDC
               </Button>
-              <Button
-                fullWidth
-                loading={depositLoading}
-                onClick={handleDeposit}
-              >
-                Deposit
+            </div>
+            <div className="space-y-3">
+              <AmountInput label="Withdraw" value={withdrawAmount} onChange={setWithdrawAmount} max={vault.data ?? null} />
+              <Button fullWidth variant="outlined" icon={<ArrowUpRight size={15} />} disabled={!canWithdraw || tx.isRunning} onClick={handleWithdraw}>
+                Withdraw USDC
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        </SectionCard>
+      </div>
+
+      <SectionCard title="Rubbi wallet ledger" subtitle="Deposits, withdrawals, card loads and refunds recorded by the indexer">
+        {walletTxs.isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
+        {walletTxs.data && walletTxs.data.items.length === 0 && <EmptyState title="No wallet activity yet" />}
+        {walletTxs.data?.items.map((row) => <TransactionRow key={row.id} tx={row} />)}
+      </SectionCard>
     </div>
   );
 }
