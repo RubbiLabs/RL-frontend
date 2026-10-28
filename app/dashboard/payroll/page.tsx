@@ -1,7 +1,8 @@
 "use client";
 import React, { useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Pause, Play, Send, XCircle } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, FileSpreadsheet, ListPlus, Pause, Play, Send, XCircle } from "lucide-react";
 
+import CsvImport from "@/components/payroll/CsvImport";
 import ScheduleRowsForm from "@/components/payroll/ScheduleRowsForm";
 import AmountInput from "@/components/ui/AmountInput";
 import Button from "@/components/ui/Button";
@@ -41,6 +42,7 @@ export default function PayrollPage() {
 
   const [fundAmount, setFundAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [createMode, setCreateMode] = useState<"manual" | "csv">("manual");
   const [lastPayout, setLastPayout] = useState<Array<{ id: string; paid: boolean }> | null>(null);
 
   const usdcWallet = account.data?.usdc.hasTrustline ? account.data.usdc.balance : 0n;
@@ -88,6 +90,26 @@ export default function PayrollPage() {
     );
     if (!result) throw new Error("cancelled");
     refresh();
+  };
+
+  const handleCreateBatch = async (
+    inputs: ScheduleInput[],
+    firstDue: bigint,
+    batchIndex: number,
+    totalBatches: number,
+  ): Promise<{ ids: bigint[] } | null> => {
+    const batchLabel = totalBatches > 1 ? ` (batch ${batchIndex} of ${totalBatches})` : "";
+    const result = await tx.run(
+      {
+        title: `Create ${inputs.length} schedule${inputs.length === 1 ? "" : "s"}${batchLabel}`,
+        description: `Batch ${batchIndex} of ${totalBatches} — validated atomically by the payroll contract.`,
+        successTitle: `Batch ${batchIndex} of ${totalBatches} created`,
+      },
+      ({ config, address: addr, sign }) => createSchedules(config, { employer: addr, inputs, firstDue }, { sign }),
+    );
+    if (!result) return null;
+    refresh();
+    return { ids: result.ids };
   };
 
   const lifecycle = async (s: ApiSchedule, action: "pause" | "resume" | "cancel") => {
@@ -178,8 +200,45 @@ export default function PayrollPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="Create schedules" subtitle="Up to 25 per transaction" className="lg:col-span-2">
-          <ScheduleRowsForm employer={address} disabled={tx.isRunning} onSubmit={handleCreate} />
+        <SectionCard
+          title="Create schedules"
+          subtitle={createMode === "csv" ? "Import CSV and submit in batches of up to 25" : "Up to 25 per transaction"}
+          className="lg:col-span-2"
+          action={
+            <div className="inline-flex rounded-xl border border-neutral-200 p-1 bg-neutral-50">
+              <button
+                type="button"
+                onClick={() => setCreateMode("manual")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  createMode === "manual" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
+                }`}
+              >
+                <ListPlus size={13} />
+                Manual rows
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateMode("csv")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  createMode === "csv" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
+                }`}
+              >
+                <FileSpreadsheet size={13} />
+                Import CSV
+              </button>
+            </div>
+          }
+        >
+          {createMode === "csv" ? (
+            <CsvImport
+              employer={address}
+              currentEscrow={escrow.data}
+              disabled={tx.isRunning}
+              onSubmitBatch={handleCreateBatch}
+            />
+          ) : (
+            <ScheduleRowsForm employer={address} disabled={tx.isRunning} onSubmit={handleCreate} />
+          )}
         </SectionCard>
       </div>
 
