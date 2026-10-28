@@ -47,7 +47,7 @@ Ports: the frontend runs on **3001** (`dev` and `start` scripts) and the API on 
 | `NEXT_PUBLIC_USDC_SAC_ID`, `NEXT_PUBLIC_VAULT_CONTRACT_ID`, `NEXT_PUBLIC_SUBSCRIPTIONS_CONTRACT_ID`, `NEXT_PUBLIC_PAYROLL_CONTRACT_ID` | no | override the ids from `GET /stellar/config` |
 | `NEXT_PUBLIC_USDC_ISSUER` | no | classic USDC issuer for the trustline; resolved from the SAC's `name()` when unset |
 
-Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:errors` (compares `lib/stellar/errors.ts` with the contracts' `errors.rs`; skipped when `../RL-smart-contracts` is absent). CI (`.github/workflows/ci.yml`) runs the same four on every push and pull request.
+Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:errors` (compares `lib/stellar/errors.ts` with the contracts' `errors.rs`; skipped locally when `../RL-smart-contracts` is absent, or fails with exit code `1` when an explicit path argument is missing or out of sync). CI (`.github/workflows/ci.yml`) checks out `RubbiLabs/RL-smart-contracts` at `CONTRACTS_REF` (configurable via the `CONTRACTS_REF` repository variable, defaulting to `main`) into `contracts` and runs `node scripts/check-contract-errors.mjs contracts` on every push and pull request. When contract error codes change, update `lib/stellar/errors.ts` and bump `CONTRACTS_REF` in `.github/workflows/ci.yml` (or the repository variable).
 
 ## Flows
 

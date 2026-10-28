@@ -16,8 +16,18 @@ jobs:
       # Public value only; the build needs a base URL to embed.
       NEXT_PUBLIC_API_URL: http://localhost:3000/api/v1
       NEXT_TELEMETRY_DISABLED: "1"
+      # Pinned RL-smart-contracts ref (branch, tag, or commit SHA) for error-table verification.
+      # Override via repository variable `CONTRACTS_REF` or bump the default here when contracts change.
+      CONTRACTS_REF: ${{ vars.CONTRACTS_REF || 'main' }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check out RL-smart-contracts
+        uses: actions/checkout@v7
+        with:
+          repository: RubbiLabs/RL-smart-contracts
+          path: contracts
+          ref: ${{ env.CONTRACTS_REF }}
 
       - uses: actions/setup-node@v7
         with:
@@ -36,10 +46,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Compares lib/stellar/errors.ts with the contracts' errors.rs. The
-      # contracts repository is not checked out here, so the script prints a
-      # notice and exits 0. To enforce it, check out RubbiLabs/RL-smart-contracts
-      # next to this repository (actions/checkout with `repository` and `path`)
-      # and pass that path: `node scripts/check-contract-errors.mjs <path>`.
-      - name: Contract error tables (skips without the contracts repo)
-        run: npm run check:errors
+      # Compares lib/stellar/errors.ts with the contracts' errors.rs checked out
+      # at `contracts` (pinned via `CONTRACTS_REF`). Passing an explicit path
+      # makes a missing contracts checkout fail with exit code 1.
+      - name: Contract error tables
+        run: node scripts/check-contract-errors.mjs contracts
