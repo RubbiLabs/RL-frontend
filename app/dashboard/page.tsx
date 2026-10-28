@@ -1,107 +1,68 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { TrendingUp, RefreshCw, ArrowUpRight, Calendar } from "lucide-react";
-import { useAccount } from "wagmi";
-import { useSubscription } from "@/hooks/useContracts";
-import { useSalaryStreaming } from "@/hooks/useSalaryStreaming";
-import { useWallet } from "../../context/WalletContext";
-import StatsCard from "../../components/dashboard/StatsCard";
-import DuneAnalytics from "../../components/dashboard/DuneAnalytics";
+import React from "react";
+import Link from "next/link";
+import { ArrowDownLeft, ArrowUpRight, Calendar, CreditCard, RefreshCw, Users, Wallet } from "lucide-react";
 
-const ARBITRUM_SEPOLIA_RPC = "https://sepolia-rollup.arbitrum.io/rpc";
-const RUBBI_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_RUBBI_TOKEN_ADDRESS as `0x${string}`;
-const MODAL_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MODAL_CONTRACT_ADDRESS as `0x${string}`;
+import StatsCard from "@/components/dashboard/StatsCard";
+import SectionCard, { EmptyState, formatDate } from "@/components/ui/SectionCard";
+import { useStellarWallet } from "@/context/StellarWalletContext";
+import { useDashboardStats } from "@/hooks/useApi";
+import { apiErrorMessage } from "@/lib/api";
+import { formatUsdcDecimal } from "@/lib/stellar/amount";
+import type { ApiTransaction } from "@/types/api";
 
-function safeHexToNumber(hex: unknown, decimals = 18): number {
-  if (!hex || typeof hex !== "string" || hex === "0x" || hex === "0x0") return 0;
-  try {
-    const parsed = parseInt(hex, 16);
-    return isNaN(parsed) ? 0 : parsed / 10 ** decimals;
-  } catch {
-    return 0;
-  }
+const TYPE_LABELS: Record<string, string> = {
+  DEPOSIT: "Vault deposit",
+  WITHDRAWAL: "Vault withdrawal",
+  CARD_SPEND_SETTLED: "Card load settled",
+  REFUND: "Refund",
+  CARD_LOAD: "Card load",
+  CARD_UNLOAD: "Card unload",
+  CARD_PURCHASE: "Card purchase",
+  CARD_REFUND: "Card refund",
+  SUBSCRIPTION_PAYMENT: "Subscription charge",
+  PAYROLL_FUNDED: "Payroll escrow funded",
+  PAYROLL_DISBURSED: "Payroll payout",
+};
+
+export function TransactionRow({ tx }: { tx: ApiTransaction }) {
+  const positive = !tx.amount.startsWith("-");
+  const informational = Boolean(tx.metadata && (tx.metadata as { informational?: boolean }).informational);
+  return (
+    <div className="flex items-start gap-3 py-3 border-b border-neutral-100 last:border-0">
+      <div
+        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+          positive ? "bg-green-50 text-green-600" : "bg-neutral-100 text-neutral-600"
+        }`}
+      >
+        {positive ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-neutral-800 truncate">
+            {TYPE_LABELS[tx.type] ?? tx.type.replace(/_/g, " ").toLowerCase()}
+          </p>
+          <p className={`text-sm font-bold shrink-0 ${informational ? "text-neutral-400" : positive ? "text-green-600" : "text-neutral-700"}`}>
+            {positive ? "+" : ""}
+            {formatUsdcDecimal(tx.amount)} USDC
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <p className="text-xs text-neutral-400 truncate">
+            {tx.account === "WALLET" ? "Rubbi wallet" : "Card"} · {tx.description}
+            {informational && " · on-chain only"}
+          </p>
+          <p className="text-[11px] text-neutral-400 shrink-0">{formatDate(tx.createdAt)}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-const statusColors: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-700",
-  AUTOMATED: "bg-green-100 text-green-700",
-  COMPLETED: "bg-blue-100 text-blue-700",
-};
-
-const ActivityIcon = ({ type }: { type: string }) => {
-  const base = "w-10 h-10 rounded-xl flex items-center justify-center text-white";
-  if (type === "subscription") return <div className={`${base} bg-tertiary`}><RefreshCw size={15} /></div>;
-  if (type === "stream") return <div className={`${base} bg-primary`}><TrendingUp size={15} /></div>;
-  return <div className={`${base} bg-secondary`}><ArrowUpRight size={15} /></div>;
-};
-
 export default function DashboardPage() {
-  const { address, isConnected } = useAccount();
-  const { rubBalance: contextBalance } = useWallet();
-  const { userSubscriptions } = useSubscription();
-  const { dailyStreams, monthlyStreams } = useSalaryStreaming();
-  const [rubbiBalance, setRubbiBalance] = useState<string>("0");
-  const [modalBalance, setModalBalance] = useState<string>("0");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchBalances() {
-      if (!address || !isConnected) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const rpcBody = (to: string, data: string) => ({
-          jsonrpc: "2.0",
-          method: "eth_call",
-          params: [{ to, data }, "latest"],
-          id: 1,
-        });
-
-        const results = await Promise.allSettled([
-          RUBBI_TOKEN_ADDRESS
-            ? fetch(ARBITRUM_SEPOLIA_RPC, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(rpcBody(RUBBI_TOKEN_ADDRESS, `0x70a08231000000000000000000000000${address.slice(2)}`)),
-              }).then((r) => r.json())
-            : Promise.resolve(null),
-          MODAL_CONTRACT_ADDRESS
-            ? fetch(ARBITRUM_SEPOLIA_RPC, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(rpcBody(MODAL_CONTRACT_ADDRESS, `0xf8b2cb4f000000000000000000000000${address.slice(2)}`)),
-              }).then((r) => r.json())
-            : Promise.resolve(null),
-        ]);
-
-        const rubbiData = results[0].status === "fulfilled" ? results[0].value : null;
-        const modalData = results[1].status === "fulfilled" ? results[1].value : null;
-
-        const rubbiBal = safeHexToNumber(rubbiData?.result);
-        const modalBal = safeHexToNumber(modalData?.result);
-
-        setRubbiBalance(rubbiBal.toFixed(2));
-        setModalBalance(modalBal.toFixed(2));
-      } catch (err) {
-        console.error("Error fetching balances:", err);
-      }
-      setLoading(false);
-    }
-
-    fetchBalances();
-  }, [address, isConnected]);
-
-  const walletBal = Number(contextBalance) || Number(rubbiBalance) || 0;
-  const totalBalance = (walletBal + Number(modalBalance)).toFixed(2);
-  const activeSubs = userSubscriptions.filter((s: any) => s.active).length;
-  const totalStreams = dailyStreams.length + monthlyStreams.length;
-
-  const activities = [
-    { id: "1", icon: "subscription", label: activeSubs > 0 ? "Active Subscriptions" : "No Active Subscriptions", amount: `-${(activeSubs * 10).toFixed(2)} RUBBI`, time: "Now", status: activeSubs > 0 ? "ACTIVE" : "NONE", positive: false },
-    { id: "2", icon: "stream", label: totalStreams > 0 ? "Salary Streams Active" : "No Salary Streams", amount: totalStreams > 0 ? `${totalStreams} Active` : "—", time: "Now", status: totalStreams > 0 ? "AUTOMATED" : "NONE", positive: true },
-  ];
+  const { user, config } = useStellarWallet();
+  const stats = useDashboardStats();
+  const data = stats.data;
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -109,67 +70,77 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl lg:text-3xl font-extrabold text-neutral-900">Overview</h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Real-time surveillance of your liquidity nodes and automated salary streams on the Arbitrum ledger.
+            {user?.username ? `Hi @${user.username}. ` : ""}Your balances, subscriptions and payroll at a glance, from Rubbi&apos;s
+            indexer.
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest">Arbitrum Sepolia</span>
-        </div>
+        {config && (
+          <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest">Stellar {config.network}</span>
+          </div>
+        )}
       </div>
+
+      {stats.isError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{apiErrorMessage(stats.error)}</div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatsCard
-          label="RUBBI Balance"
-          value={loading ? "—" : walletBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          sub={loading ? "Loading..." : `${walletBal.toFixed(2)} in wallet, ${Number(modalBalance).toFixed(2)} in contract`}
-          icon={<span className="text-primary text-[11px] font-extrabold">RUB</span>}
+          label="Rubbi wallet"
+          value={data ? `${formatUsdcDecimal(data.walletBalance)}` : "—"}
+          sub="USDC in the vault, withdrawable"
+          icon={<Wallet size={14} className="text-primary" />}
+          highlight
         />
         <StatsCard
-          label="Modal Contract"
-          value={loading ? "—" : Number(modalBalance).toFixed(2)}
-          sub={loading ? "Loading..." : "Available for subscriptions"}
-          icon={<div className="w-4 h-4 rounded-full bg-blue-300" />}
+          label="Card balance"
+          value={data ? `${formatUsdcDecimal(data.cardBalance)}` : "—"}
+          sub="USDC loaded on your card"
+          icon={<CreditCard size={14} className="text-primary" />}
         />
         <StatsCard
-          label="Active Subscriptions"
-          value={activeSubs.toString()}
-          sub={activeSubs > 0 ? `${activeSubs} plan${activeSubs > 1 ? "s" : ""} active` : "No active plans"}
-          icon={<Calendar size={14} className="text-primary" />}
+          label="Subscriptions"
+          value={data ? String(data.activeSubscriptions) : "—"}
+          sub={data && data.pastDueSubscriptions > 0 ? `${data.pastDueSubscriptions} past due` : "active plans"}
+          icon={<RefreshCw size={14} className="text-primary" />}
         />
         <StatsCard
-          label="Salary Streams"
-          value={totalStreams.toString()}
-          sub={totalStreams > 0 ? `${dailyStreams.length} daily, ${monthlyStreams.length} monthly` : "No streams"}
-          icon={<TrendingUp size={14} className="text-primary" />}
+          label="Payroll"
+          value={data ? String(data.activeSchedules) : "—"}
+          sub={data ? `${data.incomingSchedules} paying you` : "active schedules"}
+          icon={<Users size={14} className="text-primary" />}
         />
       </div>
 
-      <DuneAnalytics />
+      <div className="grid lg:grid-cols-3 gap-6">
+        <SectionCard title="Recent activity" subtitle="Last 10 ledger rows across both balances" className="lg:col-span-2">
+          {stats.isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
+          {data && data.recentTransactions.length === 0 && (
+            <EmptyState title="No activity yet">Deposit USDC on the Wallet page to get started.</EmptyState>
+          )}
+          {data?.recentTransactions.map((tx) => <TransactionRow key={tx.id} tx={tx} />)}
+        </SectionCard>
 
-      <div className="bg-white rounded-2xl p-6 border border-neutral-100">
-        <h3 className="font-bold text-neutral-900 mb-5">Recent Activities</h3>
-        <div className="space-y-4">
-          {activities.map((a) => (
-            <div key={a.id} className="flex items-start gap-3">
-              <ActivityIcon type={a.icon} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1">
-                  <p className="text-sm font-semibold text-neutral-800 truncate">{a.label}</p>
-                  <p className="text-xs text-neutral-400 shrink-0">{a.time}</p>
-                </div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${statusColors[a.status] || "bg-neutral-100 text-neutral-500"}`}>
-                    {a.status}
-                  </span>
-                  <span className={`text-sm font-bold ${a.positive ? "text-green-600" : "text-neutral-600"}`}>
-                    {a.amount}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <SectionCard title="Quick actions">
+          <div className="space-y-2">
+            {[
+              { href: "/dashboard/wallet", label: "Deposit or withdraw USDC", icon: <Wallet size={15} /> },
+              { href: "/dashboard/card", label: "Load your card", icon: <CreditCard size={15} /> },
+              { href: "/dashboard/subscriptions", label: "Subscribe to a plan", icon: <Calendar size={15} /> },
+              { href: "/dashboard/payroll", label: "Run payroll", icon: <Users size={15} /> },
+            ].map((a) => (
+              <Link
+                key={a.href}
+                href={a.href}
+                className="flex items-center gap-3 rounded-xl border border-neutral-200 px-4 py-3 text-sm font-semibold text-neutral-700 hover:border-primary/40 hover:text-primary transition-colors"
+              >
+                {a.icon} {a.label}
+              </Link>
+            ))}
+          </div>
+        </SectionCard>
       </div>
     </div>
   );
