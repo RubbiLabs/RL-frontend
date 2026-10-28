@@ -3,7 +3,7 @@ import React from "react";
 import Link from "next/link";
 import { useStellarWallet } from "@/context/StellarWalletContext";
 import RubbiLogo from "@/components/ui/RubbiLogo";
-import { FileText } from "lucide-react";
+import { FileText, ExternalLink, FlaskConical } from "lucide-react";
 
 export default function LandingFooter() {
   const year = new Date().getFullYear();
@@ -27,13 +27,13 @@ export default function LandingFooter() {
                       </Link>
 
             <p className="text-sm text-neutral-500 leading-relaxed max-w-xs">
-              Building the architectural foundations for a decentralized, autonomous financial era on Stellar.
-              Permanent. Trustworthy. Tactile.
+              A USDC wallet, virtual card, subscriptions and payroll on Stellar, signed with your own wallet.
+              Open source under the MIT license.
             </p>
             <div className="flex items-center gap-2 mt-6">
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 bg-neutral-100 px-3 py-1.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                Secure Enclave Active
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
+                <FlaskConical size={12} />
+                Running on Stellar testnet
               </span>
             </div>
           </div>
@@ -47,6 +47,11 @@ export default function LandingFooter() {
                   <FileText size={14} /> Documentation
                 </Link>
               </li>
+              <li>
+                <a href="https://github.com/RubbiLabs" target="_blank" rel="noreferrer" className="text-sm text-neutral-600 hover:text-primary transition-colors font-medium flex items-center gap-2">
+                  <ExternalLink size={14} /> GitHub
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -55,7 +60,7 @@ export default function LandingFooter() {
       <div className="border-t border-neutral-200">
         <div className="px-6 lg:px-36 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-neutral-400">
-            © {year} Rubbi Financial Automation. All rights reserved.
+            © {year} RubbiLabs contributors. MIT licensed.
           </p>
           <div className="flex items-center gap-5">
             <Link href="/docs" className="text-xs text-neutral-400 hover:text-primary transition-colors">Documentation</Link>

@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Calendar, DollarSign, ArrowRight, Shield, Wallet } from "lucide-react";
+import { Calendar, DollarSign, ArrowRight, Shield, Wallet, CreditCard, ExternalLink } from "lucide-react";
 import { useStellarWallet } from "@/context/StellarWalletContext";
 import Button from "@/components/ui/Button";
 
@@ -49,24 +49,34 @@ function FadeIn({
 
 const services = [
   {
-    icon: <Calendar size={22} className="text-primary" />,
+    icon: <CreditCard size={22} className="text-primary" />,
     iconBg: "bg-primary/8",
-    title: "Streaming Subscriptions",
-    desc: "Continuous value transfer protocols for modern services. Funds stay in your wallet: you grant a bounded, expiring USDC allowance and each period is pulled on time.",
-    tags: ["Zero-delay cancellations", "Multi-token support"],
+    title: "Rubbi wallet and card",
+    desc: "Deposit USDC into your Rubbi wallet on Stellar and withdraw it whenever you like. Load part of it onto a virtual card and unload what you do not spend.",
+    tags: ["Withdraw at any time, even while paused", "Card from a mock issuer on testnet"],
     tagColor: "bg-primary/8 text-primary",
     linkColor: "text-primary hover:text-secondary",
     dark: false,
   },
   {
-    icon: <DollarSign size={22} className="text-white" />,
+    icon: <Calendar size={22} className="text-white" />,
     iconBg: "bg-white/10",
-    title: "Payroll",
-    desc: "Pre-fund an escrow and schedule recurring USDC salaries for up to 25 people per transaction. Missed periods stay owed and catch up one period at a time.",
-    tags: ["Automated tax withholding", "Global compliance rails"],
+    title: "Subscriptions",
+    desc: "Pay recurring plans from your own wallet. You approve a USDC allowance for a few periods; each payment is pulled when it is due and never early or twice.",
+    tags: ["Allowance covers a set number of payments", "Pause, resume or cancel from your wallet"],
     tagColor: "bg-white/10 text-white/80",
     linkColor: "text-white/60 hover:text-white",
     dark: true,
+  },
+  {
+    icon: <DollarSign size={22} className="text-primary" />,
+    iconBg: "bg-primary/8",
+    title: "Payroll",
+    desc: "Fund an escrow and schedule recurring USDC salaries for your team, up to 25 schedules per transaction. A missed period stays owed and is paid one period at a time.",
+    tags: ["Pay what is due with one click", "Withdraw unused escrow at any time"],
+    tagColor: "bg-primary/8 text-primary",
+    linkColor: "text-primary hover:text-secondary",
+    dark: false,
   },
 ];
 
@@ -88,13 +98,14 @@ export default function ServicesSection() {
               Foundations
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-neutral-900 leading-tight mb-6">
-              Built for Permanent Trust.
+              Your keys, your money.
             </h2>
             <p className="text-neutral-500 leading-relaxed text-[15px]">
-              Rubbi isn&apos;t just a dApp; it&apos;s a digital institution. Built on
-              Stellar&apos;s fast, low-fee network with USDC as the settlement asset,
-              we provide a tactile ledger experience that automates complex
-              financial workflows without compromising on security or speed.
+              Rubbi is a set of open-source Soroban contracts on Stellar with USDC as
+              the only asset. Every deposit, withdrawal, approval and payroll action
+              is a transaction you sign in your own wallet. Rubbi&apos;s backend only
+              settles card loads, runs the keeper that triggers due payments, and
+              mirrors on-chain events for your dashboard.
             </p>
           </FadeIn>
 
@@ -102,18 +113,18 @@ export default function ServicesSection() {
             {[
               {
                 icon: <Shield size={18} className="text-primary" />,
-                title: "Immutable Logic",
-                desc: "Smart contracts audited for absolute resilience.",
+                title: "Open source, tested in CI",
+                desc: "Contracts, backend and app are MIT-licensed with full test suites. The contracts have not been independently audited yet.",
               },
               {
                 icon: <Calendar size={18} className="text-tertiary" />,
-                title: "Stellar Powered",
-                desc: "Ledgers close every ~5 seconds with fees of a fraction of a cent.",
+                title: "Built on Stellar",
+                desc: "Ledgers close about every 5 seconds and network fees are a fraction of a cent. Rubbi charges a 0.5% fee on subscription and payroll payments.",
               },
               {
                 icon: <DollarSign size={18} className="text-secondary" />,
-                title: "Unified Wallet",
-                desc: "Sign in with any Stellar wallet (SEP-10); Rubbi never holds your keys.",
+                title: "Sign in with your wallet",
+                desc: "SEP-10 sign-in with a Stellar wallet such as Freighter. Rubbi never holds your keys.",
               },
             ].map((f) => (
               <div
@@ -138,14 +149,14 @@ export default function ServicesSection() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <FadeIn className="text-center mb-14">
             <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">
-              Our Capabilities
+              What you can do today
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-neutral-900">
-              The Services Suite
+              Three things, done properly
             </h2>
           </FadeIn>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {services.map((s, i) => (
               <FadeIn key={s.title} delay={i * 100}>
                 <div
@@ -219,11 +230,12 @@ export default function ServicesSection() {
               </div>
               <div className="relative z-10">
                 <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-4">
-                  Ready to Architect Your Capital?
+                  Try it on Stellar testnet
                 </h2>
                 <p className="text-white/70 text-sm max-w-md mx-auto mb-8 leading-relaxed">
-                  Join builders and teams who are automating their financial
-                  future through Rubbi&apos;s on-chain ledger on Stellar.
+                  Install Freighter, switch it to testnet, get XLM from Friendbot and
+                  USDC from Circle&apos;s faucet, and walk through every flow with test
+                  funds. The code is open on GitHub.
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
                   <Button
@@ -233,14 +245,22 @@ export default function ServicesSection() {
                     loading={isConnecting}
                     onClick={handleConnect}
                   >
-                    Begin Automation
+                    Get started
                   </Button>
                   <Link
                     href="/docs"
                     className="inline-flex items-center gap-2 px-7 py-3.5 bg-white/10 text-white rounded-xl text-base font-semibold border border-white/20 hover:bg-white/20 transition-all"
                   >
-                    View Documentation
+                    Read the guide
                   </Link>
+                  <a
+                    href="https://github.com/RubbiLabs"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-7 py-3.5 bg-white/10 text-white rounded-xl text-base font-semibold border border-white/20 hover:bg-white/20 transition-all"
+                  >
+                    <ExternalLink size={18} /> GitHub
+                  </a>
                 </div>
               </div>
             </div>
