@@ -104,9 +104,25 @@ export interface ApiSchedule {
   createdAt: string;
 }
 
+export const TRANSACTION_TYPES = [
+  "DEPOSIT",
+  "WITHDRAWAL",
+  "CARD_SPEND_SETTLED",
+  "REFUND",
+  "CARD_LOAD",
+  "CARD_UNLOAD",
+  "CARD_PURCHASE",
+  "CARD_REFUND",
+  "SUBSCRIPTION_PAYMENT",
+  "PAYROLL_FUNDED",
+  "PAYROLL_DISBURSED",
+] as const;
+
+export type TransactionType = (typeof TRANSACTION_TYPES)[number] | (string & {});
+
 export interface ApiTransaction {
   id: string;
-  type: string;
+  type: TransactionType;
   account: "WALLET" | "CARD";
   amount: string; // signed delta
   balanceAfter: string;

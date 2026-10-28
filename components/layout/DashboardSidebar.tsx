@@ -2,7 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, RectangleHorizontal, CreditCard, Users, Wallet, ExternalLink } from "lucide-react";
+import { LayoutDashboard, RectangleHorizontal, CreditCard, Users, Wallet, History, ExternalLink } from "lucide-react";
 
 import RubbiLogo from "@/components/ui/RubbiLogo";
 import { useStellarWallet } from "@/context/StellarWalletContext";
@@ -14,6 +14,7 @@ export const navItems = [
   { href: "/dashboard/card", label: "Card", icon: RectangleHorizontal },
   { href: "/dashboard/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/dashboard/payroll", label: "Payroll", icon: Users },
+  { href: "/dashboard/history", label: "History", icon: History },
 ];
 
 export function NetworkPanel() {

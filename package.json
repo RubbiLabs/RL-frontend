@@ -8,6 +8,7 @@
     "start": "next start -p 3001",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test lib/history/transactions.test.ts",
     "check:errors": "node scripts/check-contract-errors.mjs"
   },
   "dependencies": {

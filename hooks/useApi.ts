@@ -18,7 +18,8 @@ export function useApiKeys() {
     subscriptions: ["subscriptions", address] as const,
     schedules: ["schedules", address] as const,
     incoming: ["schedules-incoming", address] as const,
-    transactions: (account?: "WALLET" | "CARD", page = 1) => ["transactions", address, account ?? "ALL", page] as const,
+    transactions: (account?: "WALLET" | "CARD", page = 1, pageSize = 10) =>
+      ["transactions", address, account ?? "ALL", page, pageSize] as const,
     stats: ["dashboard-stats", address] as const,
   };
 }
@@ -81,7 +82,7 @@ export function useTransactions(params: { account?: "WALLET" | "CARD"; page?: nu
   const keys = useApiKeys();
   const enabled = useSignedIn();
   return useQuery({
-    queryKey: keys.transactions(params.account, params.page ?? 1),
+    queryKey: keys.transactions(params.account, params.page ?? 1, params.pageSize ?? 10),
     queryFn: () => api.transactions.list(params),
     enabled,
   });

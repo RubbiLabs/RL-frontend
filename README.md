@@ -60,6 +60,7 @@ Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:er
 | Card | `/dashboard/card` | `POST /cards/load` / `POST /cards/unload`, movements polled every 5 s while `PENDING`, `SETTLED` or `PENDING_TREASURY` |
 | Subscriptions | `/dashboard/subscriptions` | step 1 SAC `approve(amount × 3 periods, expiration ledger)`, step 2 `subscribe`; allowance status from `allowance()` and the SAC's allowance ledger entry; `pause_subscription` / `resume_subscription` / `cancel_subscription` |
 | Payroll | `/dashboard/payroll` | `fund` / `withdraw_escrow`, `create_schedules` (≤ 25 per transaction, validated client-side and atomically on-chain), `pause_schedule` / `resume_schedule` / `cancel_schedule`, "Pay due now" = `disburse_batch` |
+| History | `/dashboard/history` | unified wallet and card ledger with URL-synced filters (account, multi-select type, date range, text search), pagination, and client-side CSV export |
 | Dashboard | `/dashboard` | `GET /dashboard/stats` only |
 
 ## Code map
@@ -71,6 +72,7 @@ Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:er
 | `lib/stellar/invoke.ts` | build → simulate → assemble → wallet sign → submit → poll; `StellarTxError` with user-facing messages |
 | `lib/stellar/errors.ts` | error code tables for the vault, subscriptions, payroll and the USDC SAC |
 | `lib/stellar/{vault,subscriptions,payroll,sac,account}.ts` | typed contract calls and ledger reads |
+| `lib/history/transactions.ts` | URL-synced ledger filter helpers and 7-decimal CSV export |
 | `lib/stellar/walletKit.ts` | lazy, client-only Stellar Wallets Kit initialisation (Freighter first) |
 | `context/StellarWalletContext.tsx` | connect / disconnect / network check / `signTransaction` / SEP-10 session |
 | `lib/api.ts`, `types/api.ts` | typed API client and response types |
