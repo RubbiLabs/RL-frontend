@@ -1,14 +1,14 @@
 "use client";
 import React from "react";
 import Link from "next/link";
-import { useWallet } from "@/context/WalletContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 import RubbiLogo from "@/components/ui/RubbiLogo";
 import { FileText } from "lucide-react";
 
 export default function LandingFooter() {
   const year = new Date().getFullYear();
-  const { isConnected } = useWallet();
-  const logoHref = isConnected ? "/dashboard" : "/";
+  const { isSignedIn } = useStellarWallet();
+  const logoHref = isSignedIn ? "/dashboard" : "/";
 
 
 
@@ -27,7 +27,7 @@ export default function LandingFooter() {
                       </Link>
 
             <p className="text-sm text-neutral-500 leading-relaxed max-w-xs">
-              Building the architectural foundations for a decentralized, autonomous financial era on Arbitrum.
+              Building the architectural foundations for a decentralized, autonomous financial era on Stellar.
               Permanent. Trustworthy. Tactile.
             </p>
             <div className="flex items-center gap-2 mt-6">

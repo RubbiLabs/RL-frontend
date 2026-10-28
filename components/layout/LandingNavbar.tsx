@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, Wallet } from "lucide-react";
-import { useWallet } from "@/context/WalletContext";
 import Button from "@/components/ui/Button";
 import RubbiLogo from "@/components/ui/RubbiLogo";
 
@@ -12,7 +11,6 @@ export default function LandingNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { isConnected } = useWallet();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);

@@ -2,19 +2,15 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, Shield, Wallet, Zap, ArrowUpRight, Repeat } from "lucide-react";
-import { useWallet } from "@/context/WalletContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 import Button from "@/components/ui/Button";
 
 export default function HeroSection() {
   const router = useRouter();
-  const { isConnected, isConnecting } = useWallet();
+  const { isSignedIn, isConnecting } = useStellarWallet();
 
   const handleConnect = async () => {
-    if (isConnected) {
-      router.push("/dashboard");
-      return;
-    }
-    router.push("/onboarding");
+    router.push(isSignedIn ? "/dashboard" : "/onboarding");
   };
 
   return (
@@ -34,7 +30,7 @@ export default function HeroSection() {
           {/* Eyebrow */}
           <div className="inline-flex items-center gap-2 bg-primary/8 text-primary text-[11px] font-bold px-3.5 py-1.5 rounded-full mb-7 animate-fadeIn tracking-widest uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            Built on Arbitrum
+            Built on Stellar
           </div>
 
           {/* Headline */}
@@ -46,7 +42,7 @@ export default function HeroSection() {
 
           {/* Subheadline */}
           <p className="text-base lg:text-lg text-neutral-500 leading-relaxed max-w-xl mb-10">
-            Subscribe to streaming services, stream salaries, and swap tokens — all gasless, all on-chain, all from one dashboard.
+            Fund a USDC balance, pay recurring subscriptions, run payroll for your team and spend through a virtual card — all from one dashboard on Stellar.
           </p>
 
           {/* CTA Buttons */}
@@ -57,7 +53,7 @@ export default function HeroSection() {
               loading={isConnecting}
               onClick={handleConnect}
             >
-              {isConnected ? "Go to Dashboard" : "Begin Automation"}
+              {isSignedIn ? "Go to Dashboard" : "Get Started"}
             </Button>
 
           </div>
@@ -66,11 +62,11 @@ export default function HeroSection() {
           <div className="flex items-center gap-6 text-neutral-400">
             <div className="flex items-center gap-2">
               <Shield size={14} />
-              <span className="text-xs font-semibold">Gasless Transactions</span>
+              <span className="text-xs font-semibold">Non-custodial subscriptions</span>
             </div>
             <div className="flex items-center gap-2">
               <Zap size={14} />
-              <span className="text-xs font-semibold">Instant Settlement</span>
+              <span className="text-xs font-semibold">USDC settlement in seconds</span>
             </div>
             <div className="flex items-center gap-2">
               <CreditCard size={14} />
@@ -88,7 +84,7 @@ export default function HeroSection() {
               <CreditCard size={18} className="text-white/70" />
             </div>
             <div className="w-8 h-8 rounded-lg bg-[#EBCB7B] mb-7" />
-            <p className="font-mono tracking-[0.28em] text-sm mb-7">5234 1988 2400 6721</p>
+            <p className="font-mono tracking-[0.28em] text-sm mb-7">•••• •••• •••• 6721</p>
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-[9px] text-white/45 uppercase tracking-[0.28em] mb-1">Holder</p>
@@ -104,12 +100,12 @@ export default function HeroSection() {
           {/* Floating notification - Subscription */}
           <div className="absolute -left-4 top-[220px] rounded-2xl bg-white border border-neutral-200 px-4 py-3 shadow-xl animate-floatReverse z-10">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-red-500 flex items-center justify-center overflow-hidden">
-                <img src="/subscriptions/netflix.svg" alt="Netflix" className="w-6 h-6 object-contain" />
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden">
+                <Repeat size={16} className="text-primary" />
               </div>
               <div>
-                <p className="text-sm font-bold text-neutral-900">Netflix Premium</p>
-                <p className="text-xs text-green-600 font-semibold">Active Subscription</p>
+                <p className="text-sm font-bold text-neutral-900">Streaming plan</p>
+                <p className="text-xs text-green-600 font-semibold">Charged 12.00 USDC · Active</p>
               </div>
             </div>
           </div>
@@ -121,8 +117,8 @@ export default function HeroSection() {
                 <Repeat size={16} className="text-white" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/45">Swap Complete</p>
-                <p className="text-sm font-semibold">1.5 ETH → 2,400 RUB</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/45">Card loaded</p>
+                <p className="text-sm font-semibold">+50.00 USDC on card</p>
               </div>
             </div>
           </div>
@@ -134,8 +130,8 @@ export default function HeroSection() {
                 <ArrowUpRight size={16} />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/55">Salary Stream</p>
-                <p className="text-sm font-semibold">+245 RUB settled</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/55">Payroll</p>
+                <p className="text-sm font-semibold">+245.00 USDC paid out</p>
               </div>
             </div>
           </div>

@@ -74,7 +74,7 @@ export default function TestimonialsSection() {
                 Voices from the Archive
               </div>
               <h2 className="text-3xl lg:text-4xl font-extrabold text-neutral-900 leading-tight mb-4">
-                Teams building on Arbitrum trust Rubbi to automate their finances.
+                Teams building on Stellar trust Rubbi to automate their finances.
               </h2>
               <p className="text-sm text-neutral-500 leading-relaxed">
                 Real teams. Real automation. Real capital flows on-chain.
@@ -96,7 +96,7 @@ export default function TestimonialsSection() {
                       ))}
                     </div>
                     <p className="text-sm text-neutral-700 leading-relaxed italic mb-5">
-                      "{t.quote}"
+                      &ldquo;{t.quote}&rdquo;
                     </p>
                   </div>
                   <div className="flex items-center gap-3 pt-4 border-t border-neutral-100">
@@ -129,7 +129,7 @@ export default function TestimonialsSection() {
             </h2>
             <p className="text-neutral-500 text-sm leading-relaxed mb-8">
               Get in touch with our integration team to explore how Rubbi can
-              streamline your financial operations on Arbitrum.
+              streamline your financial operations on Stellar.
             </p>
             <div className="space-y-5">
               <div className="flex items-center gap-3">

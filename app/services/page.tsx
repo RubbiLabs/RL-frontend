@@ -8,8 +8,7 @@ import { Calendar, DollarSign, Shield, Wallet, ArrowRight } from "lucide-react";
 import NextImage from "next/image";
 import LandingNavbar from "../../components/layout/LandingNavbar";
 import LandingFooter from "../../components/layout/LandingFooter";
-import { useWallet } from "../../context/WalletContext";
-import { useToast } from "../../context/ToastContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 import Button from "../../components/ui/Button";
 
 function FadeIn({
@@ -52,25 +51,18 @@ function FadeIn({
 
 export default function ServicesPage() {
 	const router = useRouter();
-	const { isConnected, isHydrated, connect, isConnecting } = useWallet();
-	const { success, error } = useToast();
+	const { isSignedIn, isHydrated, isConnecting } = useStellarWallet();
 
 	useEffect(() => {
 		if (!isHydrated) return;
-		if (isConnected) router.replace("/dashboard");
-	}, [isConnected, isHydrated, router]);
+		if (isSignedIn) router.replace("/dashboard");
+	}, [isSignedIn, isHydrated, router]);
 
-	const handleConnect = async () => {
-		try {
-			await connect();
-			success("Wallet Connected!");
-			router.push("/dashboard");
-		} catch {
-			error("Connection Failed", "Please try again.");
-		}
+	const handleConnect = () => {
+		router.push("/onboarding");
 	};
 
-	if (!isHydrated || isConnected) return null;
+	if (isHydrated && isSignedIn) return null;
 
 	return (
 		<div className='min-h-screen bg-neutral-50 font-manrope overflow-x-hidden'>
@@ -93,7 +85,7 @@ export default function ServicesPage() {
 						</h1>
 						<p className='text-neutral-500 leading-relaxed'>
 							Rubbi architects the next generation of capital flow. We replace
-							manual friction with automated smart-contract logic on Arbitrum,
+							manual friction with automated smart-contract logic on Stellar,
 							ensuring your assets move with architectural precision.
 						</p>
 					</div>
@@ -116,7 +108,7 @@ export default function ServicesPage() {
 							</h2>
 							<p className='text-neutral-500 leading-relaxed mb-6'>
 								Continuous value transfer protocols for modern services. No more
-								billing cycles — just per-second settlement on Arbitrum that mirrors
+								billing cycles — just on-time USDC settlement on Stellar that mirrors
 								real-time consumption.
 							</p>
 							<div className='flex flex-wrap gap-2 mb-8'>
@@ -132,7 +124,7 @@ export default function ServicesPage() {
 								iconPosition='right'
 								onClick={handleConnect}
 								loading={isConnecting}>
-								{isConnected ? "Manage Subscriptions" : "Get Started"}
+								Get Started
 							</Button>
 						</FadeIn>
 						<FadeIn delay={150}>
@@ -211,7 +203,7 @@ export default function ServicesPage() {
 										</div>
 										<div>
 											<p className='text-xs text-white/40'>NETWORK</p>
-											<p className='text-sm font-semibold'>Arbitrum Sepolia</p>
+											<p className='text-sm font-semibold'>Stellar</p>
 										</div>
 									</div>
 									<p className='mt-3 text-sm font-semibold'>@username</p>
@@ -235,7 +227,7 @@ export default function ServicesPage() {
 							<p className='text-white/70 leading-relaxed mb-6'>
 								Your reputation is your most valuable asset. Aggregate your
 								cross-chain activity into a single, verifiable on-chain ledger. Your
-								Rubbi identity is your permanent digital fingerprint on Arbitrum.
+								Rubbi identity is your permanent digital fingerprint on Stellar.
 							</p>
 							<Link
 								href='#'
@@ -264,7 +256,7 @@ export default function ServicesPage() {
 							<p className='text-neutral-500 leading-relaxed mb-6'>
 								Empower your workforce with immediate liquidity on-chain. Salary
 								Streaming enables employees to access their earnings as they
-								accrue on Arbitrum, eliminating the bi-weekly wait and fostering
+								accrue on Stellar, eliminating the bi-weekly wait and fostering
 								financial sovereignty.
 							</p>
 							<div className='grid grid-cols-3 gap-4 sm:gap-6 mb-8'>
@@ -298,11 +290,11 @@ export default function ServicesPage() {
 								<div className='p-6 font-mono text-sm space-y-2'>
 									<p className='text-green-500'>$ rubbi stream create</p>
 									<p className='text-neutral-400'>recipient: 0x4a...e89</p>
-									<p className='text-neutral-400'>amount: 4500 RUB/month</p>
+									<p className='text-neutral-400'>amount: 4,500 USDC / month</p>
 									<p className='text-neutral-400'>interval: monthly</p>
 									<p className='text-green-400 mt-3'>✓ Stream initiated</p>
 									<p className='text-neutral-500'>Block #18,394,022</p>
-									<p className='text-primary'>Flowing at 0.25 RUB/hr</p>
+									<p className='text-primary'>Next payout in 12 days</p>
 								</div>
 							</div>
 						</FadeIn>
@@ -319,7 +311,7 @@ export default function ServicesPage() {
 						</h2>
 						<p className='text-neutral-500 mb-8'>
 							Join builders and teams who have automated their financial
-							future through Rubbi&apos;s on-chain ledger on Arbitrum.
+							future through Rubbi&apos;s on-chain ledger on Stellar.
 						</p>
 						<div className='flex flex-wrap justify-center gap-3'>
 							<Button

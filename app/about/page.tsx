@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import LandingNavbar from "../../components/layout/LandingNavbar";
 import LandingFooter from "../../components/layout/LandingFooter";
 import { Shield, Zap, BookOpen } from "lucide-react";
-import { useWallet } from "../../context/WalletContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 
 function FadeIn({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -23,14 +23,14 @@ function FadeIn({ children, delay = 0, className = "" }: { children: React.React
 
 export default function AboutPage() {
   const router = useRouter();
-  const { isConnected, isHydrated } = useWallet();
+  const { isSignedIn, isHydrated } = useStellarWallet();
 
   useEffect(() => {
     if (!isHydrated) return;
-    if (isConnected) router.replace("/dashboard");
-  }, [isConnected, isHydrated, router]);
+    if (isSignedIn) router.replace("/dashboard");
+  }, [isSignedIn, isHydrated, router]);
 
-  if (!isHydrated || isConnected) return null;
+  if (isHydrated && isSignedIn) return null;
 
   return (
     <div className="min-h-screen bg-neutral-50 font-manrope overflow-x-hidden">
@@ -75,10 +75,10 @@ export default function AboutPage() {
             <FadeIn>
               <h2 className="text-3xl sm:text-4xl lg:text-4xl font-extrabold text-neutral-900 mb-6">A Mission of Permanence</h2>
               <p className="text-neutral-500 leading-relaxed mb-6">
-                The digital world moves fast, often sacrificing stability for speed. Rubbi was conceived to bridge this gap — creating a financial interface that feels as substantial and permanent as a physical bank vault, while harnessing the infinite scalability of Arbitrum's L2 infrastructure.
+                The digital world moves fast, often sacrificing stability for speed. Rubbi was conceived to bridge this gap — creating a financial interface that feels as substantial and permanent as a physical bank vault, while harnessing the speed and low fees of the Stellar network.
               </p>
               <p className="text-neutral-500 leading-relaxed mb-8">
-                We believe that autonomy requires structure. Our "Tactile Ledger" philosophy ensures that every transaction, every stream, and every automated event is recorded with editorial clarity and structural integrity on-chain.
+                We believe that autonomy requires structure. Our &quot;Tactile Ledger&quot; philosophy ensures that every transaction, every stream, and every automated event is recorded with editorial clarity and structural integrity on-chain.
               </p>
               <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary border-b-2 border-primary pb-1">
                 Our Core Thesis
@@ -138,10 +138,10 @@ export default function AboutPage() {
           <FadeIn>
             <h2 className="text-3xl lg:text-4xl font-extrabold text-neutral-900 mb-6">A New Era of Finance</h2>
             <p className="text-neutral-500 leading-relaxed mb-6">
-              Rubbi isn't just a tool; it's a statement about the future of digital wealth. As we move away from manual intervention and toward a world of autonomous financial entities, we need a common language of trust built on-chain.
+              Rubbi isn&apos;t just a tool; it&apos;s a statement about the future of digital wealth. As we move away from manual intervention and toward a world of autonomous financial entities, we need a common language of trust built on-chain.
             </p>
             <p className="text-neutral-500 leading-relaxed">
-              The Tactile Ledger is that language. It is the archive where your financial future is not just recorded, but constructed — layer by layer, block by block, on Arbitrum.
+              The Tactile Ledger is that language. It is the archive where your financial future is not just recorded, but constructed — layer by layer, ledger by ledger, on Stellar.
             </p>
           </FadeIn>
         </div>

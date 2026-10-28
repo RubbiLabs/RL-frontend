@@ -3,8 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Calendar, DollarSign, ArrowRight, Shield, Wallet } from "lucide-react";
-import { useWallet } from "@/context/WalletContext";
-import { useToast } from "@/context/ToastContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 import Button from "@/components/ui/Button";
 
 function FadeIn({
@@ -53,7 +52,7 @@ const services = [
     icon: <Calendar size={22} className="text-primary" />,
     iconBg: "bg-primary/8",
     title: "Streaming Subscriptions",
-    desc: "Continuous value transfer protocols for modern services. No more billing cycles — just per-second settlement that mirrors real-time consumption on Arbitrum.",
+    desc: "Continuous value transfer protocols for modern services. Funds stay in your wallet: you grant a bounded, expiring USDC allowance and each period is pulled on time.",
     tags: ["Zero-delay cancellations", "Multi-token support"],
     tagColor: "bg-primary/8 text-primary",
     linkColor: "text-primary hover:text-secondary",
@@ -62,8 +61,8 @@ const services = [
   {
     icon: <DollarSign size={22} className="text-white" />,
     iconBg: "bg-white/10",
-    title: "Salary Streams",
-    desc: "Revolutionize payroll with continuous liquidity on-chain. Empower your team with real-time access to their earned capital, second by second.",
+    title: "Payroll",
+    desc: "Pre-fund an escrow and schedule recurring USDC salaries for up to 25 people per transaction. Missed periods stay owed and catch up one period at a time.",
     tags: ["Automated tax withholding", "Global compliance rails"],
     tagColor: "bg-white/10 text-white/80",
     linkColor: "text-white/60 hover:text-white",
@@ -73,21 +72,10 @@ const services = [
 
 export default function ServicesSection() {
   const router = useRouter();
-  const { isConnected, connect, isConnecting } = useWallet();
-  const { success, error } = useToast();
+  const { isSignedIn, isConnecting } = useStellarWallet();
 
-  const handleConnect = async () => {
-    try {
-      if (isConnected) {
-        router.push("/dashboard");
-        return;
-      }
-      await connect();
-      success("Wallet Connected!");
-      router.push("/dashboard");
-    } catch {
-      error("Connection Failed", "Please try again.");
-    }
+  const handleConnect = () => {
+    router.push(isSignedIn ? "/dashboard" : "/onboarding");
   };
 
   return (
@@ -103,10 +91,10 @@ export default function ServicesSection() {
               Built for Permanent Trust.
             </h2>
             <p className="text-neutral-500 leading-relaxed text-[15px]">
-              Rubbi isn't just a dApp; it's a digital institution. Built on
-              Arbitrum's high-throughput L2, we provide a tactile ledger
-              experience that automates complex financial workflows without
-              compromising on decentralisation or speed.
+              Rubbi isn&apos;t just a dApp; it&apos;s a digital institution. Built on
+              Stellar&apos;s fast, low-fee network with USDC as the settlement asset,
+              we provide a tactile ledger experience that automates complex
+              financial workflows without compromising on security or speed.
             </p>
           </FadeIn>
 
@@ -119,13 +107,13 @@ export default function ServicesSection() {
               },
               {
                 icon: <Calendar size={18} className="text-tertiary" />,
-                title: "Arbitrum Powered",
-                desc: "10,000+ TPS for near-instant transactions and account updates.",
+                title: "Stellar Powered",
+                desc: "Ledgers close every ~5 seconds with fees of a fraction of a cent.",
               },
               {
                 icon: <DollarSign size={18} className="text-secondary" />,
                 title: "Unified Wallet",
-                desc: "Your Rubbi identity works across every app in the Arbitrum ecosystem.",
+                desc: "Sign in with any Stellar wallet (SEP-10); Rubbi never holds your keys.",
               },
             ].map((f) => (
               <div
@@ -235,7 +223,7 @@ export default function ServicesSection() {
                 </h2>
                 <p className="text-white/70 text-sm max-w-md mx-auto mb-8 leading-relaxed">
                   Join builders and teams who are automating their financial
-                  future through Rubbi's on-chain ledger on Arbitrum.
+                  future through Rubbi&apos;s on-chain ledger on Stellar.
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
                   <Button
