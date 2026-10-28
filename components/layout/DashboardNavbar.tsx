@@ -1,45 +1,41 @@
 "use client";
 import React, { useState } from "react";
-import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
-import { Menu, LogOut, Wallet, User } from "lucide-react";
-import { useWallet } from "@/context/WalletContext";
-import { useSocialAuth } from "@/context/SocialAuthContext";
-import { useToast } from "@/context/ToastContext";
-import { navItems } from "@/components/layout/DashboardSidebar";
-import RubbiLogo from "@/components/ui/RubbiLogo";
+import { useRouter } from "next/navigation";
+import { Menu, LogOut, Wallet, Copy, Check } from "lucide-react";
+
 import Button from "@/components/ui/Button";
+import RubbiLogo from "@/components/ui/RubbiLogo";
+import { useStellarWallet } from "@/context/StellarWalletContext";
+import { useToast } from "@/context/ToastContext";
+import { shortAddress } from "@/lib/stellar/config";
 
 interface DashboardNavbarProps {
   onMenuClick: () => void;
 }
 
 export default function DashboardNavbar({ onMenuClick }: DashboardNavbarProps) {
-  const pathname = usePathname();
   const router = useRouter();
-  const { disconnect, address } = useWallet();
-  const { isSocialLogin, socialUser, socialAddress, logoutSocial } = useSocialAuth();
+  const { disconnect, address, user, config } = useStellarWallet();
   const { info } = useToast();
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const handleDisconnect = () => {
-    if (isSocialLogin) {
-      logoutSocial();
-    } else {
-      disconnect();
-    }
-    info("Signed Out", "You have been signed out.");
+  const handleDisconnect = async () => {
+    await disconnect();
+    info("Signed out", "Your wallet is disconnected.");
     router.push("/");
   };
 
-  const isSocial = isSocialLogin && socialUser;
-  const displayName = isSocial
-    ? socialUser.name.split(" ")[0]
-    : address
-      ? `${address.slice(0, 6)}...${address.slice(-4)}`
-      : "";
-
-  const profilePicture = isSocial && socialUser.picture ? socialUser.picture : null;
+  const copyAddress = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable: the address is still visible.
+    }
+  };
 
   return (
     <>
@@ -52,43 +48,36 @@ export default function DashboardNavbar({ onMenuClick }: DashboardNavbarProps) {
           >
             <Menu size={18} />
           </button>
-
           <div className="flex items-center gap-2 lg:hidden">
             <RubbiLogo size={28} />
           </div>
-
-          <div className="hidden lg:flex items-center gap-2">
-          </div>
+          {config && (
+            <span
+              className={`hidden sm:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                config.network === "mainnet" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              {config.network}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Profile pill */}
-          <div className="hidden sm:flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2">
-            {profilePicture ? (
-              <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                <Image
-                  src={profilePicture}
-                  alt={socialUser?.name || "User"}
-                  width={20}
-                  height={20}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            ) : (
-              <div className="w-5 h-5 bg-primary/10 rounded-full flex items-center justify-center">
-                {isSocial ? (
-                  <User size={11} className="text-primary" />
-                ) : (
-                  <Wallet size={11} className="text-primary" />
-                )}
-              </div>
-            )}
+          <button
+            onClick={copyAddress}
+            title={address ?? ""}
+            className="hidden sm:flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 hover:border-primary/40 transition-colors"
+          >
+            <div className="w-5 h-5 bg-primary/10 rounded-full flex items-center justify-center">
+              <Wallet size={11} className="text-primary" />
+            </div>
             <span className="text-[13px] font-medium text-neutral-600 leading-none">
-              {displayName}
+              {user?.username ? `@${user.username}` : address ? shortAddress(address, 6, 4) : ""}
             </span>
-          </div>
+            {address && (copied ? <Check size={12} className="text-green-600" /> : <Copy size={12} className="text-neutral-400" />)}
+          </button>
 
-          {/* Disconnect */}
           <button
             onClick={() => setShowDisconnectModal(true)}
             title="Sign out"
@@ -102,13 +91,9 @@ export default function DashboardNavbar({ onMenuClick }: DashboardNavbarProps) {
       {showDisconnectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md animate-scaleIn">
-            <h3 className="text-lg font-bold text-neutral-900 mb-2">
-              {isSocial ? "Sign Out?" : "Disconnect Wallet?"}
-            </h3>
+            <h3 className="text-lg font-bold text-neutral-900 mb-2">Disconnect wallet?</h3>
             <p className="text-sm text-neutral-500 mb-6">
-              {isSocial
-                ? `Are you sure you want to sign out of ${socialUser.email}? You will be redirected to the homepage.`
-                : "Are you sure you want to disconnect your wallet? You will be redirected to the homepage."}
+              Your session token will be discarded and you will be redirected to the homepage.
             </p>
             <div className="flex gap-3">
               <Button variant="ghost" onClick={() => setShowDisconnectModal(false)}>
@@ -119,10 +104,10 @@ export default function DashboardNavbar({ onMenuClick }: DashboardNavbarProps) {
                 variant="danger"
                 onClick={() => {
                   setShowDisconnectModal(false);
-                  handleDisconnect();
+                  void handleDisconnect();
                 }}
               >
-                {isSocial ? "Sign Out" : "Disconnect"}
+                Disconnect
               </Button>
             </div>
           </div>

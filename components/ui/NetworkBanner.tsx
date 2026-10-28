@@ -1,29 +1,18 @@
 "use client";
 
-import { useNetworkSwitch } from "@/hooks/useNetworkSwitch";
-import { useToast } from "@/context/ToastContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 
+/** Shown when the wallet is on another Stellar network than the app's configuration. */
 export function NetworkBanner() {
-  const { isCorrectNetwork, isPending, switchToArbitrum, isConnected } = useNetworkSwitch();
-  const { toast } = useToast();
-
-  if (!isConnected || isCorrectNetwork) return null;
+  const { config, networkMismatch, walletNetworkPassphrase } = useStellarWallet();
+  if (!config || !networkMismatch) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-yellow-950 px-4 py-3 flex items-center justify-center gap-4">
-      <span className="text-sm font-medium">
-        Wrong network detected. Please switch to Arbitrum Sepolia.
+    <div className="bg-yellow-400 text-yellow-950 px-4 py-2.5 flex items-center justify-center gap-3 text-sm font-medium">
+      <span>
+        Your wallet is on <span className="font-mono text-xs">{walletNetworkPassphrase}</span>. Switch it to{" "}
+        <strong>Stellar {config.network}</strong> to sign transactions.
       </span>
-      <button
-        onClick={() => {
-          switchToArbitrum();
-          toast("info", "Switching", "Please confirm in your wallet");
-        }}
-        disabled={isPending}
-        className="px-4 py-1.5 bg-yellow-600 text-white text-sm font-semibold rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50"
-      >
-        {isPending ? "Switching..." : "Switch Network"}
-      </button>
     </div>
   );
 }
