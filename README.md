@@ -15,10 +15,10 @@ No private key ever reaches the browser. Every `NEXT_PUBLIC_*` value is public (
 ```bash
 npm ci
 cp .env.example .env.local      # set NEXT_PUBLIC_API_URL
-npm run dev                      # http://localhost:3000 (use -p 3001 when the API uses 3000)
+npm run dev                      # http://localhost:3001
 ```
 
-The API must list this app's origin in its `CORS_ORIGINS` (see `RL-api/.env.example`).
+Ports: the frontend runs on **3001** (`dev` and `start` scripts) and the API on **3000** (`NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`). The API must list this app's origin in its `CORS_ORIGINS` (default `http://localhost:3001`, see `RL-api/.env.example`).
 
 | Variable | Required | Notes |
 |---|---|---|
