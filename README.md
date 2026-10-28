@@ -46,6 +46,7 @@ Ports: the frontend runs on **3001** (`dev` and `start` scripts) and the API on 
 | `NEXT_PUBLIC_STELLAR_NETWORK`, `NEXT_PUBLIC_STELLAR_RPC_URL`, `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | no | override `GET /stellar/config` |
 | `NEXT_PUBLIC_USDC_SAC_ID`, `NEXT_PUBLIC_VAULT_CONTRACT_ID`, `NEXT_PUBLIC_SUBSCRIPTIONS_CONTRACT_ID`, `NEXT_PUBLIC_PAYROLL_CONTRACT_ID` | no | override the ids from `GET /stellar/config` |
 | `NEXT_PUBLIC_USDC_ISSUER` | no | classic USDC issuer for the trustline; resolved from the SAC's `name()` when unset |
+| `NEXT_PUBLIC_HORIZON_URL` | no | Horizon base URL for DEX path quotes (defaults to testnet/mainnet Horizon) |
 
 Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:errors` (compares `lib/stellar/errors.ts` with the contracts' `errors.rs`; skipped when `../RL-smart-contracts` is absent). CI (`.github/workflows/ci.yml`) runs the same four on every push and pull request.
 
@@ -56,7 +57,7 @@ Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:er
 | Sign-in | `/onboarding` | connect (Stellar Wallets Kit) → `GET /auth/challenge` → wallet signs the SEP-10 challenge → `POST /auth/token` → JWT kept in memory and `sessionStorage` |
 | Username and card | `/onboarding` | `POST /users/username` creates the card; cards from the mock issuer carry a visible **MOCK** badge |
 | Trustline | `/dashboard/wallet` | account and USDC trustline read via RPC `getLedgerEntries`; one-click `changeTrust`; Friendbot and Circle faucet links on testnet |
-| Rubbi wallet | `/dashboard/wallet` | `vault.deposit` / `vault.withdraw` signed by the wallet; API mirror shown next to the on-chain balance |
+| Rubbi wallet | `/dashboard/wallet` | `vault.deposit` / `vault.withdraw` signed by the wallet; XLM → USDC DEX path swap (`pathPaymentStrictReceive` with slippage bound); API mirror shown next to the on-chain balance |
 | Card | `/dashboard/card` | `POST /cards/load` / `POST /cards/unload`, movements polled every 5 s while `PENDING`, `SETTLED` or `PENDING_TREASURY` |
 | Subscriptions | `/dashboard/subscriptions` | step 1 SAC `approve(amount × 3 periods, expiration ledger)`, step 2 `subscribe`; allowance status from `allowance()` and the SAC's allowance ledger entry; `pause_subscription` / `resume_subscription` / `cancel_subscription` |
 | Payroll | `/dashboard/payroll` | `fund` / `withdraw_escrow`, `create_schedules` (≤ 25 per transaction, validated client-side and atomically on-chain), `pause_schedule` / `resume_schedule` / `cancel_schedule`, "Pay due now" = `disburse_batch` |
@@ -70,7 +71,7 @@ Checks: `npm run lint`, `npm run type-check`, `npm run build`, `npm run check:er
 | `lib/stellar/amount.ts` | 7-decimal USDC helpers on `bigint`/strings (no floating-point money math) |
 | `lib/stellar/invoke.ts` | build → simulate → assemble → wallet sign → submit → poll; `StellarTxError` with user-facing messages |
 | `lib/stellar/errors.ts` | error code tables for the vault, subscriptions, payroll and the USDC SAC |
-| `lib/stellar/{vault,subscriptions,payroll,sac,account}.ts` | typed contract calls and ledger reads |
+| `lib/stellar/{vault,subscriptions,payroll,sac,account,swap}.ts` | typed contract calls, DEX path swap and ledger reads |
 | `lib/stellar/walletKit.ts` | lazy, client-only Stellar Wallets Kit initialisation (Freighter first) |
 | `context/StellarWalletContext.tsx` | connect / disconnect / network check / `signTransaction` / SEP-10 session |
 | `lib/api.ts`, `types/api.ts` | typed API client and response types |
