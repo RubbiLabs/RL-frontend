@@ -2,6 +2,8 @@
 
 [Rubbi](https://github.com/RubbiLabs) is a payment automation platform for users in Nigeria: a USDC balance on Stellar (the Rubbi wallet), a virtual card loaded from it, recurring subscriptions paid from the user's own wallet, and recurring payroll from an employer escrow. This repository is the Next.js 16 web app: wallet connection with Stellar Wallets Kit, SEP-10 sign-in, the wallet and card pages, subscriptions and payroll. It signs every contract call in the user's own wallet and talks to the Rubbi API over REST with a SEP-10 JWT. The product runs on **Stellar testnet** today; cards come from a mock issuer and carry a MOCK badge.
 
+**Try it:** web app <https://rubbilabs.vercel.app> (Stellar testnet), API <https://rubbi-api.onrender.com> (Render free tier; the first request may take up to a minute). Test funds: XLM from [Friendbot](https://lab.stellar.org/account/fund), testnet USDC from [Circle's faucet](https://faucet.circle.com).
+
 ## How the Rubbi repositories fit together
 
 Rubbi is three repositories under the [RubbiLabs](https://github.com/RubbiLabs) organisation. Nothing moves money except a transaction signed by the user's own wallet or by one of the backend's narrowly scoped keys.

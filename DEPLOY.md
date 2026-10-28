@@ -3,8 +3,7 @@
 `RL-frontend` is a Next.js 16 app with only static, client-rendered pages; it
 needs no server-side secrets. The only thing a deployment must know is where
 the Rubbi API is. The API is deployed to Render from `RL-api` on branch
-`deploy/testnet` (see `RL-api/DEPLOY.md`); deploy it first so its host is
-known.
+`develop` (see `RL-api/DEPLOY.md`); deploy it first so its host is known.
 
 Checked against Vercel's environment-variables docs on 2026-10-28
 (https://vercel.com/docs/environment-variables): variables are applied to
@@ -17,8 +16,7 @@ JavaScript bundle at build time, so every change needs a redeploy.
 2. Framework preset: **Next.js** (auto-detected). Build command `npm run build`,
    install command `npm ci` (there is a `package-lock.json`), output `.next`.
    Node.js 22.x (the version the CI workflow uses).
-3. Production branch: `deploy/testnet` (**Settings → Git → Production Branch**)
-   until the branch is merged; `main` afterwards.
+3. Production branch: `main` (**Settings → Git → Production Branch**).
 4. The production domain must be exactly `https://rubbilabs.vercel.app`, the
    origin the API's `CORS_ORIGINS` allows. If Vercel assigns a different
    project domain, either rename the project so that domain is available or
@@ -66,8 +64,8 @@ the value).
 - After changing any variable: **Deployments → ⋯ on the latest deployment →
   Redeploy** (untick "Use existing Build Cache" so the new value is inlined).
   A new commit on the production branch also picks the values up.
-- Pushing to `deploy/testnet` redeploys production; other branches create
-  preview deployments.
+- Pushing to `main` redeploys production; other branches create preview
+  deployments.
 
 ## 4. Verify
 
