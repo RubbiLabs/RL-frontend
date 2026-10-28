@@ -3,9 +3,9 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, apiErrorMessage, onUnauthorized, session } from "@/lib/api";
-import { hasCompleteEnvConfig, resolveStellarConfig, type StellarConfig } from "@/lib/stellar/config";
-import { StellarTxError, walletErrorToTxError } from "@/lib/stellar/invoke";
-import { initWalletKit, type LoadedKit } from "@/lib/stellar/walletKit";
+import { hasCompleteEnvConfig, resolveStellarConfig, shortAddress, type StellarConfig } from "@/lib/stellar/config";
+import { StellarTxError, walletAccessErrorToTxError, walletErrorToTxError } from "@/lib/stellar/invoke";
+import { FREIGHTER_MODULE_ID, initWalletKit, type LoadedKit } from "@/lib/stellar/walletKit";
 import type { ApiUser } from "@/types/api";
 
 export interface StellarWalletValue {
@@ -89,6 +89,49 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
+  /**
+   * Confirms that the wallet has granted this site access and returns the
+   * account it exposes.
+   *
+   * In kit 2.7.1 `kit.getAddress()` only reads the kit's memory (restored from
+   * localStorage) and never contacts the wallet, so an address can be shown
+   * while Freighter has not allowed the site; signing then fails with
+   * "<site> is not currently connected to Freighter". `kit.fetchAddress()`
+   * calls the module's `getAddress()` without `skipRequestAccess`, which for
+   * Freighter runs `requestAccess()`: the connect popup when the site is not
+   * allowed yet, a silent return when it is. Other wallets open their own
+   * prompt on every address fetch, so for them the kit's memory is trusted.
+   *
+   * When `expected` is given and the wallet exposes another account (the user
+   * switched accounts in the wallet), the session is dropped, the new address
+   * is adopted and the caller gets an error asking to sign in again. Nothing is
+   * ever signed for an address other than the one shown in the app.
+   */
+  const ensureWalletAccess = useCallback(
+    async (loaded: LoadedKit, expected: string | null): Promise<string> => {
+      let granted: string;
+      try {
+        const current = loaded.kit.selectedModule;
+        granted =
+          current.productId === FREIGHTER_MODULE_ID
+            ? (await loaded.kit.fetchAddress()).address
+            : (await loaded.kit.getAddress()).address;
+      } catch (error) {
+        throw walletAccessErrorToTxError(error);
+      }
+      if (expected && granted !== expected) {
+        signOut();
+        setAddress(granted);
+        throw new StellarTxError(
+          "rejected",
+          `Your wallet switched accounts. Sign in again with ${shortAddress(granted)}.`,
+        );
+      }
+      return granted;
+    },
+    [signOut],
+  );
+
   // Load the kit once the network is known, subscribe to its state and restore a previous session.
   useEffect(() => {
     if (!config) return;
@@ -116,20 +159,18 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
         const stored = session.get();
         if (stored) {
           try {
-            const { address: current } = await loaded.kit.getAddress();
-            if (current === stored.address) {
-              setAddress(current);
-              setToken(stored.token);
-              try {
-                const network = await loaded.kit.getNetwork();
-                setWalletNetworkPassphrase(network.networkPassphrase);
-              } catch {
-                // Some wallets do not expose the network; the banner stays hidden.
-              }
-              await refreshUser();
-            } else {
-              session.clear();
+            // Confirms site access with the wallet; a different account or a
+            // denied request throws, and the session is dropped below.
+            const current = await ensureWalletAccess(loaded, stored.address);
+            setAddress(current);
+            setToken(stored.token);
+            try {
+              const network = await loaded.kit.getNetwork();
+              setWalletNetworkPassphrase(network.networkPassphrase);
+            } catch {
+              // Some wallets do not expose the network; the banner stays hidden.
             }
+            await refreshUser();
           } catch {
             session.clear();
           }
@@ -145,14 +186,17 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
       cancelled = true;
       unsubscribe.forEach((fn) => fn());
     };
-  }, [config, refreshUser, signOut]);
+  }, [config, ensureWalletAccess, refreshUser, signOut]);
 
   const connect = useCallback(async (): Promise<string> => {
     const loaded = kitRef.current;
     if (!loaded) throw new Error("The wallet kit is not ready yet.");
     setIsConnecting(true);
     try {
-      const { address: next } = await loaded.kit.authModal();
+      await loaded.kit.authModal();
+      // The modal's address is not trusted until the wallet confirms the site
+      // has access (Freighter shows its connect popup here if it has not).
+      const next = await ensureWalletAccess(loaded, null);
       setAddress(next);
       try {
         const network = await loaded.kit.getNetwork();
@@ -164,11 +208,11 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
       if (stored && stored.address !== next) signOut();
       return next;
     } catch (error) {
-      throw walletErrorToTxError(error);
+      throw error instanceof StellarTxError ? error : walletErrorToTxError(error);
     } finally {
       setIsConnecting(false);
     }
-  }, [signOut]);
+  }, [ensureWalletAccess, signOut]);
 
   const disconnect = useCallback(async () => {
     signOut();
@@ -195,6 +239,7 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
           `Your wallet is on another network. Switch it to ${config.network} and try again.`,
         );
       }
+      await ensureWalletAccess(loaded, address);
       try {
         const { signedTxXdr } = await loaded.kit.signTransaction(xdr, {
           networkPassphrase: config.networkPassphrase,
@@ -205,19 +250,21 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
         throw walletErrorToTxError(error);
       }
     },
-    [address, config, networkMismatch],
+    [address, config, ensureWalletAccess, networkMismatch],
   );
 
   const signIn = useCallback(async (): Promise<ApiUser> => {
     if (!address) throw new Error("Connect a wallet first.");
     setIsSigningIn(true);
     try {
+      const loaded = kitRef.current;
+      if (!loaded) throw new Error("The wallet kit is not ready yet.");
+      // Site access first: without it Freighter refuses to sign the challenge.
+      await ensureWalletAccess(loaded, address);
       const challenge = await api.auth.challenge(address);
       if (config && challenge.network_passphrase !== config.networkPassphrase) {
         throw new Error("The API's SEP-10 challenge is for a different network than this app.");
       }
-      const loaded = kitRef.current;
-      if (!loaded) throw new Error("The wallet kit is not ready yet.");
       let signed: string;
       try {
         signed = (
@@ -238,7 +285,7 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
     } finally {
       setIsSigningIn(false);
     }
-  }, [address, config]);
+  }, [address, config, ensureWalletAccess]);
 
   const value = useMemo<StellarWalletValue>(
     () => ({
