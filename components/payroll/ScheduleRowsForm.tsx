@@ -1,47 +1,33 @@
 "use client";
 import React, { useMemo, useState } from "react";
-import { StrKey } from "@stellar/stellar-sdk";
 import { Plus, Trash2 } from "lucide-react";
 
 import AmountInput from "@/components/ui/AmountInput";
 import Button from "@/components/ui/Button";
+import {
+  MIN_FIRST_DUE_MS,
+  rowToScheduleInput,
+  toLocalInputValue,
+  validateFirstDue,
+  validateRow,
+  validateRows,
+  type ScheduleRowDraft,
+} from "@/lib/payroll/validate";
 import { formatUsdc, isValidUsdcAmount, parseUsdc } from "@/lib/stellar/amount";
 import { MAX_SCHEDULES_PER_CALL, type ScheduleInput } from "@/lib/stellar/payroll";
 
-const DAY = 86_400;
 const PERIOD_PRESETS = [
   { label: "Daily", days: 1 },
   { label: "Weekly", days: 7 },
   { label: "Every 2 weeks", days: 14 },
   { label: "Every 30 days", days: 30 },
 ];
-const MAX_LABEL_BYTES = 64;
-const MIN_FIRST_DUE_MS = 10 * 60 * 1000;
 
-interface Row {
-  recipient: string;
-  amount: string;
-  periodDays: string;
-  label: string;
-}
+type Row = ScheduleRowDraft;
 
 const emptyRow = (): Row => ({ recipient: "", amount: "", periodDays: "30", label: "" });
 
-function toLocalInputValue(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-export function validateRow(row: Row, employer: string | null): string | null {
-  if (!StrKey.isValidEd25519PublicKey(row.recipient.trim())) return "Recipient must be a Stellar account (G…).";
-  if (row.recipient.trim() === employer) return "The recipient cannot be the employer.";
-  if (!isValidUsdcAmount(row.amount)) return "Amount must be a positive USDC amount (max 7 decimals).";
-  const days = Number(row.periodDays);
-  if (!Number.isInteger(days) || days < 1 || days > 366) return "Period must be between 1 and 366 days.";
-  const labelBytes = new TextEncoder().encode(row.label).length;
-  if (labelBytes > MAX_LABEL_BYTES) return `Label is ${labelBytes} bytes; the maximum is ${MAX_LABEL_BYTES}.`;
-  return null;
-}
+export { validateRow };
 
 interface Props {
   employer: string | null;
@@ -59,14 +45,9 @@ export default function ScheduleRowsForm({ employer, disabled, onSubmit }: Props
   });
   const [submitted, setSubmitted] = useState(false);
 
-  const errors = useMemo(() => rows.map((row) => validateRow(row, employer)), [rows, employer]);
+  const errors = useMemo(() => validateRows(rows, employer), [rows, employer]);
   const firstDueDate = new Date(firstDue);
-  const firstDueError =
-    Number.isNaN(firstDueDate.getTime())
-      ? "Pick a first payment date."
-      : firstDueDate.getTime() < Date.now() + MIN_FIRST_DUE_MS
-        ? "The first payment must be at least 10 minutes in the future."
-        : null;
+  const firstDueError = validateFirstDue(firstDue);
   const valid = errors.every((e) => e === null) && !firstDueError && rows.length > 0;
   const total = rows.reduce((sum, row) => (isValidUsdcAmount(row.amount) ? sum + parseUsdc(row.amount) : sum), 0n);
 
@@ -76,12 +57,7 @@ export default function ScheduleRowsForm({ employer, disabled, onSubmit }: Props
   const submit = async () => {
     setSubmitted(true);
     if (!valid) return;
-    const inputs: ScheduleInput[] = rows.map((row) => ({
-      recipient: row.recipient.trim(),
-      amount: parseUsdc(row.amount),
-      period: BigInt(Number(row.periodDays) * DAY),
-      label: row.label.trim(),
-    }));
+    const inputs: ScheduleInput[] = rows.map(rowToScheduleInput);
     await onSubmit(inputs, BigInt(Math.floor(firstDueDate.getTime() / 1000)));
     setRows([emptyRow()]);
     setSubmitted(false);
