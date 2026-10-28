@@ -13,6 +13,7 @@ export interface StellarConfig {
   network: StellarNetwork;
   networkPassphrase: string;
   rpcUrl: string;
+  horizonUrl: string;
   usdcSacId: string;
   contracts: {
     vault: string;
@@ -38,6 +39,11 @@ const PASSPHRASES: Record<StellarNetwork, string> = {
   mainnet: "Public Global Stellar Network ; September 2015",
 };
 
+export const DEFAULT_HORIZON_URLS: Record<StellarNetwork, string> = {
+  testnet: "https://horizon-testnet.stellar.org",
+  mainnet: "https://horizon.stellar.org",
+};
+
 function blank(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
@@ -47,6 +53,7 @@ function blank(value: string | undefined): string | undefined {
 export const envOverrides = {
   network: blank(process.env.NEXT_PUBLIC_STELLAR_NETWORK),
   rpcUrl: blank(process.env.NEXT_PUBLIC_STELLAR_RPC_URL),
+  horizonUrl: blank(process.env.NEXT_PUBLIC_HORIZON_URL),
   networkPassphrase: blank(process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE),
   usdcSacId: blank(process.env.NEXT_PUBLIC_USDC_SAC_ID),
   vault: blank(process.env.NEXT_PUBLIC_VAULT_CONTRACT_ID),
@@ -92,10 +99,13 @@ export function resolveStellarConfig(api: ApiStellarConfig | null): StellarConfi
   const resolvedNetwork: StellarNetwork =
     network ?? (networkPassphrase === PASSPHRASES.mainnet ? "mainnet" : "testnet");
 
+  const horizonUrl = (envOverrides.horizonUrl ?? DEFAULT_HORIZON_URLS[resolvedNetwork]).replace(/\/+$/, "");
+
   return {
     network: resolvedNetwork,
     networkPassphrase,
     rpcUrl,
+    horizonUrl,
     usdcSacId,
     contracts: { vault, subscriptions, payroll },
     usdcIssuer: envOverrides.usdcIssuer ?? null,

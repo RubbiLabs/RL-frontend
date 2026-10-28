@@ -6,6 +6,7 @@ import { TransactionRow } from "@/app/dashboard/page";
 import AmountInput from "@/components/ui/AmountInput";
 import Button from "@/components/ui/Button";
 import SectionCard, { EmptyState } from "@/components/ui/SectionCard";
+import SwapCard from "@/components/wallet/SwapCard";
 import { useStellarWallet } from "@/context/StellarWalletContext";
 import { useInvalidateAfterTx, useMe, useTransactions } from "@/hooks/useApi";
 import { useAccountState, useUsdcAsset, useVaultBalance } from "@/hooks/useChain";
@@ -203,6 +204,13 @@ export default function WalletPage() {
           </div>
         </SectionCard>
       </div>
+
+      <SwapCard
+        usdcAsset={asset.data}
+        hasTrustline={Boolean(state?.usdc.hasTrustline)}
+        xlmBalanceStroops={state?.xlmStroops ?? 0n}
+        onSwapSuccess={refreshChain}
+      />
 
       <SectionCard title="Rubbi wallet ledger" subtitle="Deposits, withdrawals, card loads and refunds recorded by the indexer">
         {walletTxs.isLoading && <p className="text-sm text-neutral-400">Loading…</p>}
