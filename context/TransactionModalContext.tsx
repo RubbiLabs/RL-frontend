@@ -1,14 +1,14 @@
 "use client";
-import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+
 import TransactionLoadingModal, { type TransactionStatus } from "@/components/ui/TransactionLoadingModal";
 
 interface TransactionModalContextValue {
-  showTxModal: (config: {
-    type: string;
-    title: string;
-    description?: string;
-  }) => void;
-  setTxStatus: (status: TransactionStatus, description?: string, txHash?: string, error?: string) => void;
+  showTxModal: (config: { title: string; description?: string }) => void;
+  setTxStatus: (
+    status: TransactionStatus,
+    patch?: { description?: string; txHash?: string | null; explorerUrl?: string | null; error?: string | null },
+  ) => void;
   hideTxModal: () => void;
 }
 
@@ -24,53 +24,50 @@ interface ModalState {
   title: string;
   description: string;
   txHash: string | null;
+  explorerUrl: string | null;
   error: string | null;
 }
 
-export function TransactionModalProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<ModalState>({
-    open: false,
-    status: "idle",
-    title: "",
-    description: "",
-    txHash: null,
-    error: null,
-  });
+const CLOSED: ModalState = {
+  open: false,
+  status: "idle",
+  title: "",
+  description: "",
+  txHash: null,
+  explorerUrl: null,
+  error: null,
+};
 
-  const showTxModal = useCallback((config: { type: string; title: string; description?: string }) => {
+export function TransactionModalProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<ModalState>(CLOSED);
+
+  const showTxModal = useCallback((config: { title: string; description?: string }) => {
     setState({
+      ...CLOSED,
       open: true,
-      status: "submitting",
+      status: "signing",
       title: config.title,
-      description: config.description || "Submitting transaction via gasless relay...",
-      txHash: null,
-      error: null,
+      description: config.description ?? "",
     });
   }, []);
 
-  const setTxStatus = useCallback((status: TransactionStatus, description?: string, txHash?: string, error?: string) => {
+  const setTxStatus = useCallback<TransactionModalContextValue["setTxStatus"]>((status, patch = {}) => {
     setState((prev) => ({
       ...prev,
       status,
-      description: description || prev.description,
-      txHash: txHash || prev.txHash,
-      error: error || prev.error,
+      description: patch.description ?? prev.description,
+      txHash: patch.txHash === undefined ? prev.txHash : patch.txHash,
+      explorerUrl: patch.explorerUrl === undefined ? prev.explorerUrl : patch.explorerUrl,
+      error: patch.error === undefined ? prev.error : patch.error,
     }));
   }, []);
 
-  const hideTxModal = useCallback(() => {
-    setState({
-      open: false,
-      status: "idle",
-      title: "",
-      description: "",
-      txHash: null,
-      error: null,
-    });
-  }, []);
+  const hideTxModal = useCallback(() => setState(CLOSED), []);
+
+  const value = useMemo(() => ({ showTxModal, setTxStatus, hideTxModal }), [showTxModal, setTxStatus, hideTxModal]);
 
   return (
-    <TransactionModalContext.Provider value={{ showTxModal, setTxStatus, hideTxModal }}>
+    <TransactionModalContext.Provider value={value}>
       {children}
       <TransactionLoadingModal
         open={state.open}
@@ -78,6 +75,7 @@ export function TransactionModalProvider({ children }: { children: ReactNode }) 
         title={state.title}
         description={state.description}
         txHash={state.txHash}
+        explorerUrl={state.explorerUrl}
         error={state.error}
         onClose={hideTxModal}
       />

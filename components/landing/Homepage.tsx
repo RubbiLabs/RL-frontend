@@ -4,7 +4,6 @@ import LandingNavbar from "../../components/layout/LandingNavbar";
 import LandingFooter from "../../components/layout/LandingFooter";
 import HeroSection from "../../components/landing/Herosection";
 import ServicesSection from "../../components/landing/ServicesSection";
-import TestimonialsSection from "../../components/landing/TestimonialsSection";
 
 export default function HomePage() {
   return (
@@ -12,7 +11,6 @@ export default function HomePage() {
       <LandingNavbar />
       <HeroSection />
       <ServicesSection />
-      <TestimonialsSection />
       <LandingFooter />
     </div>
   );

@@ -1,242 +1,181 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api-integration-e21v.onrender.com/api/v1";
+import { API_BASE_URL, type ApiStellarConfig } from "@/lib/stellar/config";
+import type {
+  ApiCardMe,
+  ApiCardMovement,
+  ApiCardReveal,
+  ApiChallenge,
+  ApiDashboardStats,
+  ApiDeposit,
+  ApiPlan,
+  ApiSchedule,
+  ApiSubscription,
+  ApiToken,
+  ApiTransactionPage,
+  ApiUser,
+} from "@/types/api";
 
-interface ApiResponse<T> {
-  data?: T;
-  error?: string;
-  message?: string;
-}
+/**
+ * Typed client for the Rubbi API. The SEP-10 JWT lives in memory and is
+ * mirrored to sessionStorage (cleared when the tab closes); it is sent as a
+ * bearer token, never as a cookie.
+ */
 
-class ApiError extends Error {
-  constructor(public status: number, message: string) {
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly body: unknown = null,
+  ) {
     super(message);
     this.name = "ApiError";
   }
 }
 
-async function fetchApi<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("rubbi_token") : null;
-  
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
+const SESSION_KEY = "rubbi.session";
 
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new ApiError(response.status, data.message || "API Error");
-    }
-
-    return { data };
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return { error: error.message };
-    }
-    return { error: "Network error" };
-  }
-}
-
-// Auth Types
-export interface RegisterRequest {
-  walletAddress: string;
-  signature: string;
-}
-
-export interface RegisterResponse {
+export interface StoredSession {
   token: string;
-  user: {
-    id: string;
-    walletAddress: string;
-    cardLastFour: string;
-    cardExpiry: string;
-  };
+  address: string;
 }
 
-export interface LoginRequest {
-  walletAddress: string;
-  signature: string;
-}
+let currentToken: string | null = null;
 
-export interface LoginResponse {
-  token: string;
-  user: {
-    id: string;
-    walletAddress: string;
-    cardLastFour: string;
-    cardExpiry: string;
-  };
-}
-
-// Subscription Types
-export interface SubscriptionPlan {
-  id: number;
-  name: string;
-  fee: string;
-  active: boolean;
-}
-
-export interface UserSubscription {
-  id: string;
-  name: string;
-  fee: string;
-  active: boolean;
-  subPlanId: number;
-  userAddress: string;
-}
-
-// Card Types
-export interface CardInfo {
-  id: string;
-  lastFour: string;
-  expiry: string;
-  status: "active" | "frozen" | "inactive";
-  network: string;
-}
-
-// Transactions
-export interface Transaction {
-  id: string;
-  type: "deposit" | "subscription" | "withdrawal" | "topup";
-  amount: string;
-  status: "pending" | "completed" | "failed";
-  timestamp: string;
-  txHash?: string;
-}
-
-// API Client
-export const api = {
-  // Auth
-  auth: {
-    register: (walletAddress: string, username: string) =>
-      fetchApi<RegisterResponse>("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ walletAddress, username }),
-      }),
-
-    login: (walletAddress: string) =>
-      fetchApi<LoginResponse>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ walletAddress }),
-      }),
+export const session = {
+  get(): StoredSession | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as StoredSession;
+      if (typeof parsed.token !== "string" || typeof parsed.address !== "string") return null;
+      currentToken = parsed.token;
+      return parsed;
+    } catch {
+      return null;
+    }
   },
-
-  // Subscriptions
-  subscriptions: {
-    plans: () => fetchApi<SubscriptionPlan[]>("/subscriptions/plans"),
-    me: () => fetchApi<UserSubscription[]>("/subscriptions/me"),
-    start: (planId: number, txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>("/subscriptions/start", {
-        method: "POST",
-        body: JSON.stringify({ planId, txHash }),
-      }),
-    pause: (planId: number, txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>(`/subscriptions/${planId}/pause`, {
-        method: "POST",
-        body: JSON.stringify({ txHash }),
-      }),
-    resume: (planId: number, txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>(`/subscriptions/${planId}/resume`, {
-        method: "POST",
-        body: JSON.stringify({ txHash }),
-      }),
+  set(value: StoredSession) {
+    currentToken = value.token;
+    try {
+      window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
+    } catch {
+      // Private mode or storage disabled: the token stays in memory only.
+    }
   },
-
-  // Cards
-  cards: {
-    me: () => fetchApi<CardInfo>("/cards/me"),
-    freeze: () => fetchApi<{ success: boolean }>("/cards/freeze", { method: "POST" }),
-    unfreeze: () => fetchApi<{ success: boolean }>("/cards/unfreeze", { method: "POST" }),
-    reveal: () => fetchApi<{ pan: string }>("/cards/me/number"),
+  clear() {
+    currentToken = null;
+    try {
+      window.sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // ignore
+    }
   },
-
-  // Deposits
-  deposits: {
-    create: (amount: string) =>
-      fetchApi<{ depositAddress: string; amount: string }>("/deposits", {
-        method: "POST",
-        body: JSON.stringify({ amount }),
-      }),
-    status: (depositId: string) =>
-      fetchApi<{ status: string; confirmations: number }>(`/deposits/${depositId}`),
-  },
-
-  // Transactions
-  transactions: {
-    list: (page = 1, limit = 10) =>
-      fetchApi<{ transactions: Transaction[]; total: number }>(
-        `/transactions?page=${page}&limit=${limit}`
-      ),
-  },
-
-  // Salary Streaming
-  salaryStreaming: {
-    streams: () =>
-      fetchApi<{ daily: any[]; monthly: any[] }>("/salary-streaming/streams"),
-    stream: (streamId: string) =>
-      fetchApi<any>(`/salary-streaming/streams/${streamId}`),
-    fees: () => fetchApi<{ fees: string }>("/salary-streaming/fees"),
-    create: (txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>(
-        "/salary-streaming/streams",
-        { method: "POST", body: JSON.stringify({ txHash }) }
-      ),
-    pause: (streamId: string, txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>(
-        `/salary-streaming/streams/${streamId}/pause`,
-        { method: "POST", body: JSON.stringify({ txHash }) }
-      ),
-    resume: (streamId: string, txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>(
-        `/salary-streaming/streams/${streamId}/resume`,
-        { method: "POST", body: JSON.stringify({ txHash }) }
-      ),
-    disburse: (txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>(
-        "/salary-streaming/disburse",
-        { method: "POST", body: JSON.stringify({ txHash }) }
-      ),
-  },
-
-  // Faucet
-  faucet: {
-    claim: (txHash: string) =>
-      fetchApi<{ txHash: string; verified: boolean }>("/faucet/claim", {
-        method: "POST",
-        body: JSON.stringify({ txHash }),
-      }),
-    cooldown: () =>
-      fetchApi<{ cooldownSeconds: number; canClaim: boolean }>(
-        "/faucet/cooldown"
-      ),
+  token(): string | null {
+    return currentToken;
   },
 };
 
-// Helper to store token
-export function setToken(token: string) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("rubbi_token", token);
-  }
+type Listener = (status: number) => void;
+const unauthorizedListeners = new Set<Listener>();
+
+/** Called with 401 so the wallet context can drop a stale session. */
+export function onUnauthorized(listener: Listener): () => void {
+  unauthorizedListeners.add(listener);
+  return () => unauthorizedListeners.delete(listener);
 }
 
-export function getToken(): string | null {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("rubbi_token");
+async function request<T>(path: string, init: RequestInit & { auth?: boolean } = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (init.body !== undefined) headers["Content-Type"] = "application/json";
+  if (init.auth !== false && currentToken) headers.Authorization = `Bearer ${currentToken}`;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) } });
+  } catch {
+    throw new ApiError(0, "The Rubbi API is unreachable. Is the backend running and is this origin in its CORS_ORIGINS?");
   }
-  return null;
+
+  const text = await response.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 && init.auth !== false) {
+      for (const listener of unauthorizedListeners) listener(401);
+    }
+    const message =
+      body && typeof body === "object" && "message" in body && typeof body.message === "string"
+        ? body.message
+        : `API error ${response.status}`;
+    throw new ApiError(response.status, message, body);
+  }
+
+  return body as T;
 }
 
-export function clearToken() {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("rubbi_token");
-  }
+const json = (value: unknown) => JSON.stringify(value);
+
+export const api = {
+  stellar: {
+    config: () => request<ApiStellarConfig>("/stellar/config", { auth: false }),
+  },
+  auth: {
+    challenge: (account: string) =>
+      request<ApiChallenge>(`/auth/challenge?account=${encodeURIComponent(account)}`, { auth: false }),
+    token: (transaction: string) =>
+      request<ApiToken>("/auth/token", { method: "POST", body: json({ transaction }), auth: false }),
+  },
+  users: {
+    me: () => request<ApiUser>("/users/me"),
+    setUsername: (username: string) => request<ApiUser>("/users/username", { method: "POST", body: json({ username }) }),
+  },
+  cards: {
+    me: () => request<ApiCardMe>("/cards/me"),
+    reveal: () => request<ApiCardReveal>("/cards/me/number"),
+    freeze: () => request<{ status: string }>("/cards/freeze", { method: "POST", body: json({}) }),
+    unfreeze: () => request<{ status: string }>("/cards/unfreeze", { method: "POST", body: json({}) }),
+    load: (amount: string) => request<ApiCardMovement>("/cards/load", { method: "POST", body: json({ amount }) }),
+    unload: (amount: string) => request<ApiCardMovement>("/cards/unload", { method: "POST", body: json({ amount }) }),
+    movements: () => request<ApiCardMovement[]>("/cards/movements"),
+  },
+  subscriptions: {
+    plans: (includeInactive = false) =>
+      request<ApiPlan[]>(`/subscriptions/plans${includeInactive ? "?includeInactive=true" : ""}`, { auth: false }),
+    plan: (planId: number) => request<ApiPlan>(`/subscriptions/plans/${planId}`, { auth: false }),
+    me: () => request<ApiSubscription[]>("/subscriptions/me"),
+  },
+  payroll: {
+    schedules: () => request<ApiSchedule[]>("/payroll/schedules"),
+    incoming: () => request<ApiSchedule[]>("/payroll/schedules/incoming"),
+    schedule: (id: string) => request<ApiSchedule>(`/payroll/schedules/${id}`),
+  },
+  transactions: {
+    list: (params: { page?: number; pageSize?: number; account?: "WALLET" | "CARD" } = {}) => {
+      const query = new URLSearchParams();
+      if (params.page) query.set("page", String(params.page));
+      if (params.pageSize) query.set("pageSize", String(params.pageSize));
+      if (params.account) query.set("account", params.account);
+      const qs = query.toString();
+      return request<ApiTransactionPage>(`/transactions${qs ? `?${qs}` : ""}`);
+    },
+  },
+  deposits: {
+    list: () => request<ApiDeposit[]>("/deposits"),
+  },
+  dashboard: {
+    stats: () => request<ApiDashboardStats>("/dashboard/stats"),
+  },
+};
+
+export function apiErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return String(error);
 }

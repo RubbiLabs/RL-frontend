@@ -1,38 +1,30 @@
 "use client";
 
-import { WagmiProvider } from "wagmi";
-import { config } from "@/lib/wagmi";
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { WalletProvider } from "@/context/WalletContext";
+import { StellarWalletProvider } from "@/context/StellarWalletContext";
 import { ToastProvider } from "@/context/ToastContext";
-import { ZeroDevProvider } from "@/context/ZeroDevContext";
-import { SocialAuthProvider } from "@/context/SocialAuthContext";
 import { TransactionModalProvider } from "@/context/TransactionModalContext";
 
-const queryClient = new QueryClient();
+export default function Providers({ children }: { children: React.ReactNode }) {
+  // One client per browser session; never shared across server requests.
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 10_000 },
+        },
+      }),
+  );
 
-export default function Providers({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <SocialAuthProvider>
-            <WalletProvider>
-              <ZeroDevProvider>
-                <TransactionModalProvider>
-                  {children}
-                </TransactionModalProvider>
-              </ZeroDevProvider>
-            </WalletProvider>
-          </SocialAuthProvider>
-        </ToastProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <StellarWalletProvider>
+          <TransactionModalProvider>{children}</TransactionModalProvider>
+        </StellarWalletProvider>
+      </ToastProvider>
+    </QueryClientProvider>
   );
 }

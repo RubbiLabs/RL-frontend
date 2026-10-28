@@ -1,10 +1,12 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LandingNavbar from "../../components/layout/LandingNavbar";
 import LandingFooter from "../../components/layout/LandingFooter";
-import { Shield, Zap, BookOpen } from "lucide-react";
-import { useWallet } from "../../context/WalletContext";
+import TestnetNotice from "../../components/landing/TestnetNotice";
+import { Shield, Zap, BookOpen, ExternalLink } from "lucide-react";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 
 function FadeIn({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -21,16 +23,22 @@ function FadeIn({ children, delay = 0, className = "" }: { children: React.React
   );
 }
 
+const repos = [
+  { name: "RL-smart-contracts", desc: "Soroban contracts: vault, subscriptions, payroll", href: "https://github.com/RubbiLabs/RL-smart-contracts" },
+  { name: "RL-api", desc: "Backend: SEP-10 sign-in, event indexer, keeper, card issuer adapters", href: "https://github.com/RubbiLabs/RL-api" },
+  { name: "RL-frontend", desc: "This web app", href: "https://github.com/RubbiLabs/RL-frontend" },
+];
+
 export default function AboutPage() {
   const router = useRouter();
-  const { isConnected, isHydrated } = useWallet();
+  const { isSignedIn, isHydrated } = useStellarWallet();
 
   useEffect(() => {
     if (!isHydrated) return;
-    if (isConnected) router.replace("/dashboard");
-  }, [isConnected, isHydrated, router]);
+    if (isSignedIn) router.replace("/dashboard");
+  }, [isSignedIn, isHydrated, router]);
 
-  if (!isHydrated || isConnected) return null;
+  if (isHydrated && isSignedIn) return null;
 
   return (
     <div className="min-h-screen bg-neutral-50 font-manrope overflow-x-hidden">
@@ -44,17 +52,19 @@ export default function AboutPage() {
         <div className="px-6 lg:px-36">
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center mt-20 lg:mt-28">
             <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-4 animate-fadeIn">Building Foundations for Financial Autonomy</div>
+              <div className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-4 animate-fadeIn">About Rubbi</div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-neutral-900 leading-[1.05] tracking-tight mb-6 animate-slideUp">
-                The Architectural Archive for
+                Everyday payments,
                 <br />
-                <span className="text-primary">Decentralized Finance.</span>
+                <span className="text-primary">settled in USDC on Stellar.</span>
               </h1>
-              <p className="text-neutral-500 leading-relaxed">
-                In an era defined by autonomous code and fluid liquidity, Rubbi serves as the limestone foundation for decentralized finance. We build the tactile ledger for a future where your assets move with architectural precision.
+              <p className="text-neutral-500 leading-relaxed mb-6">
+                Rubbi is a payment automation app built for people and small teams in Nigeria who want to hold dollars,
+                pay recurring bills and salaries, and spend through a card. It runs on Stellar with USDC as its only
+                asset, and every action that moves your money is a transaction you sign in your own wallet.
               </p>
+              <TestnetNotice />
             </div>
-            {/* Abstract 3D shape placeholder */}
             <div className="hidden lg:flex items-center justify-center">
               <div className="relative w-80 h-80">
                 <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary/10 to-secondary/10 rotate-12" />
@@ -68,21 +78,27 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* MISSION */}
+      {/* HOW IT WORKS */}
       <section className="py-24 bg-white">
         <div className="px-6 lg:px-36">
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
             <FadeIn>
-              <h2 className="text-3xl sm:text-4xl lg:text-4xl font-extrabold text-neutral-900 mb-6">A Mission of Permanence</h2>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900 mb-6">How it works</h2>
               <p className="text-neutral-500 leading-relaxed mb-6">
-                The digital world moves fast, often sacrificing stability for speed. Rubbi was conceived to bridge this gap — creating a financial interface that feels as substantial and permanent as a physical bank vault, while harnessing the infinite scalability of Arbitrum's L2 infrastructure.
+                Three small Soroban contracts hold the on-chain side of the product. The <strong>vault</strong> is your
+                Rubbi wallet: deposit USDC, withdraw it any time, and load part of it onto your card. The{" "}
+                <strong>subscriptions</strong> contract never holds your funds; you approve a USDC allowance for a few
+                periods and each payment is pulled on its due date. The <strong>payroll</strong> contract holds an
+                employer&apos;s escrow and pays each schedule one period at a time.
               </p>
               <p className="text-neutral-500 leading-relaxed mb-8">
-                We believe that autonomy requires structure. Our "Tactile Ledger" philosophy ensures that every transaction, every stream, and every automated event is recorded with editorial clarity and structural integrity on-chain.
+                Rubbi&apos;s backend signs in users with SEP-10, mirrors contract events into the dashboard, runs the
+                keeper that triggers due payments (anyone could, the functions are permissionless and time-gated),
+                and settles card loads and unloads. It never holds your keys.
               </p>
-              <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary border-b-2 border-primary pb-1">
-                Our Core Thesis
-              </div>
+              <Link href="/docs" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary border-b-2 border-primary pb-1">
+                Read the guide
+              </Link>
             </FadeIn>
             <FadeIn delay={150}>
               <div className="space-y-6">
@@ -90,22 +106,22 @@ export default function AboutPage() {
                   <div className="w-10 h-10 bg-primary/8 rounded-xl flex items-center justify-center mb-4">
                     <Shield size={20} className="text-primary" />
                   </div>
-                  <h3 className="font-bold text-neutral-900 mb-2">Structural Trust</h3>
-                  <p className="text-sm text-neutral-500 leading-relaxed">Every line of code is an architectural beam. We prioritize the security and permanence of your assets over temporary market noise.</p>
+                  <h3 className="font-bold text-neutral-900 mb-2">You can always withdraw</h3>
+                  <p className="text-sm text-neutral-500 leading-relaxed">Pausing a contract blocks new deposits and payments, never withdrawals. Subscriptions can be paused, resumed or cancelled by you alone.</p>
                 </div>
                 <div className="p-6 bg-primary rounded-2xl text-white">
                   <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center mb-4">
                     <Zap size={20} className="text-white" />
                   </div>
-                  <h3 className="font-bold mb-2">Fluid Automation</h3>
-                  <p className="text-sm text-white/70 leading-relaxed">Financial streams should flow with the natural rhythm of your life. Our automation is designed to be invisible, yet immutable.</p>
+                  <h3 className="font-bold mb-2">Paid on time, never twice</h3>
+                  <p className="text-sm text-white/70 leading-relaxed">Every recurring payment is time-gated on-chain and pays exactly one period. A subscription that fell behind is charged once, not for every missed month; a missed salary stays owed and is caught up one period at a time.</p>
                 </div>
                 <div className="p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
                   <div className="w-10 h-10 bg-tertiary/10 rounded-xl flex items-center justify-center mb-4">
                     <BookOpen size={20} className="text-tertiary" />
                   </div>
-                  <h3 className="font-bold text-neutral-900 mb-2">Tactile Experience</h3>
-                  <p className="text-sm text-neutral-500 leading-relaxed">We believe in the weight of the ledger. Our UI is designed to feel physical, providing a sense of security and clarity in a digital space.</p>
+                  <h3 className="font-bold text-neutral-900 mb-2">Open source</h3>
+                  <p className="text-sm text-neutral-500 leading-relaxed">Contracts, backend and app are MIT-licensed and tested in CI. The contracts have not been independently audited yet; the fee on subscription and payroll payments is 0.5%.</p>
                 </div>
               </div>
             </FadeIn>
@@ -113,15 +129,15 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* STATS */}
+      {/* STATUS */}
       <section className="py-20 bg-primary">
         <div className="px-6 lg:px-36">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-10">
             {[
-              { val: "$0.00B", label: "Initial Capital Secured" },
-              { val: "100%", label: "On-Chain Transparency" },
-              { val: "24/7", label: "Autonomous Processing" },
-              { val: "0ms", label: "Settlement Delay" },
+              { val: "Testnet", label: "Current network" },
+              { val: "USDC", label: "Only asset" },
+              { val: "3", label: "Soroban contracts" },
+              { val: "Mock", label: "Card issuer today" },
             ].map((s) => (
               <div key={s.label} className="text-center">
                 <p className="text-3xl lg:text-4xl font-extrabold text-white mb-2">{s.val}</p>
@@ -132,17 +148,28 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* NEW ERA */}
+      {/* REPOS */}
       <section className="py-24 bg-white">
-        <div className="max-w-3xl mx-auto px-6 lg:px-8 text-center">
+        <div className="max-w-3xl mx-auto px-6 lg:px-8">
           <FadeIn>
-            <h2 className="text-3xl lg:text-4xl font-extrabold text-neutral-900 mb-6">A New Era of Finance</h2>
-            <p className="text-neutral-500 leading-relaxed mb-6">
-              Rubbi isn't just a tool; it's a statement about the future of digital wealth. As we move away from manual intervention and toward a world of autonomous financial entities, we need a common language of trust built on-chain.
+            <h2 className="text-3xl lg:text-4xl font-extrabold text-neutral-900 mb-4 text-center">Built in the open</h2>
+            <p className="text-neutral-500 leading-relaxed mb-10 text-center">
+              Rubbi is three repositories under the RubbiLabs organisation. Scoped issues labelled{" "}
+              <span className="font-semibold">Stellar Wave</span> are open to outside contributors through the Drips Wave programme.
             </p>
-            <p className="text-neutral-500 leading-relaxed">
-              The Tactile Ledger is that language. It is the archive where your financial future is not just recorded, but constructed — layer by layer, block by block, on Arbitrum.
-            </p>
+            <ul className="space-y-3">
+              {repos.map((r) => (
+                <li key={r.name}>
+                  <a href={r.href} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-4 p-5 bg-neutral-50 rounded-xl border border-neutral-100 hover:border-primary/30 transition-all">
+                    <div>
+                      <p className="font-semibold text-neutral-800 text-sm font-mono">{r.name}</p>
+                      <p className="text-xs text-neutral-500 mt-0.5">{r.desc}</p>
+                    </div>
+                    <ExternalLink size={16} className="text-neutral-400 shrink-0" />
+                  </a>
+                </li>
+              ))}
+            </ul>
           </FadeIn>
         </div>
       </section>
@@ -150,7 +177,7 @@ export default function AboutPage() {
       {/* SCROLLING TICKER */}
       <div className="bg-neutral-900 py-4 overflow-hidden ticker-wrap">
         <div className="flex animate-ticker whitespace-nowrap">
-          {["SECURITY", "LEDGER", "AUTOMATION", "IDENTITY", "TRUST", "STREAMS", "PROTOCOL", "SECURITY", "LEDGER", "AUTOMATION", "IDENTITY", "TRUST", "STREAMS", "PROTOCOL"].map((w, i) => (
+          {["WALLET", "CARD", "SUBSCRIPTIONS", "PAYROLL", "USDC", "STELLAR", "OPEN SOURCE", "WALLET", "CARD", "SUBSCRIPTIONS", "PAYROLL", "USDC", "STELLAR", "OPEN SOURCE"].map((w, i) => (
             <span key={i} className="text-neutral-600 font-bold text-lg tracking-widest mx-8">{w}</span>
           ))}
         </div>

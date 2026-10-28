@@ -1,471 +1,161 @@
 "use client";
-import React, { useState, useMemo } from "react";
-import Image from "next/image";
-import {
-  Pause,
-  Play,
-  Search,
-  CreditCard,
-  Check,
-  AlertCircle,
-  Loader2,
-  DollarSign,
-  Tv,
-} from "lucide-react";
-import { useAccount, useChainId } from "wagmi";
-import { useSubscription } from "@/hooks/useContracts";
-import { useWallet } from "@/context/WalletContext";
-import { useToast } from "@/context/ToastContext";
-import Button from "@/components/ui/Button";
-import VirtualCardModal from "@/components/dashboard/VirtualCardModal";
-import SubscriptionPlanModal from "@/components/dashboard/SubscriptionPlanModal";
-import {
-  subscriptionChannels,
-  categoryLabels,
-  type CatalogChannel,
-  type SubscriptionPlanTier,
-} from "@/lib/subscriptions";
+import React, { useMemo, useState } from "react";
+import { Pause, Play, Plus, RefreshCw, XCircle } from "lucide-react";
 
-const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
+import AllowanceStatus from "@/components/subscriptions/AllowanceStatus";
+import SubscribeModal from "@/components/subscriptions/SubscribeModal";
+import Button from "@/components/ui/Button";
+import SectionCard, { EmptyState, formatDate } from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import { useStellarWallet } from "@/context/StellarWalletContext";
+import { useInvalidateAfterTx, useMySubscriptions, usePlans } from "@/hooks/useApi";
+import { useStellarTx } from "@/hooks/useStellarTx";
+import { apiErrorMessage } from "@/lib/api";
+import { formatUsdcDecimal } from "@/lib/stellar/amount";
+import { shortAddress } from "@/lib/stellar/config";
+import { formatPeriod } from "@/lib/stellar/ledger";
+import { cancelSubscription, pauseSubscription, resumeSubscription } from "@/lib/stellar/subscriptions";
+import type { ApiPlan, ApiSubscription } from "@/types/api";
 
 export default function SubscriptionsPage() {
-  const { address } = useAccount();
-  const chainId = useChainId();
-  const { hasVirtualCard } = useWallet();
-  const { showToast } = useToast();
+  const { address } = useStellarWallet();
+  const plans = usePlans();
+  const subs = useMySubscriptions();
+  const tx = useStellarTx();
+  const invalidate = useInvalidateAfterTx();
+  const [modal, setModal] = useState<{ plan: ApiPlan; approveOnly: boolean } | null>(null);
 
-  const {
-    subscriptionPlans,
-    userSubscriptions,
-    isLoadingPlans,
-    startSubscription,
-    isSubscribing,
-    subscribeSuccess,
-    pauseSubscription,
-    resumeSubscription,
-    refetchPlans,
-    refetchSubs,
-  } = useSubscription();
+  const liveByPlan = useMemo(() => {
+    const map = new Map<number, ApiSubscription>();
+    for (const s of subs.data ?? []) if (s.status !== "CANCELLED") map.set(s.planId, s);
+    return map;
+  }, [subs.data]);
 
-  const [cardModalOpen, setCardModalOpen] = useState(false);
-  const [planModalOpen, setPlanModalOpen] = useState(false);
-  const [selectedChannel, setSelectedChannel] =
-    useState<CatalogChannel | null>(null);
-  const [pendingSubscribe, setPendingSubscribe] = useState<{
-    channel: CatalogChannel;
-    tier: SubscriptionPlanTier;
-  } | null>(null);
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const isWrongNetwork = chainId !== ARBITRUM_SEPOLIA_CHAIN_ID;
-
-  // Map on-chain subscriptions to lookup set
-  const subscribedNames = useMemo(() => {
-    if (!userSubscriptions) return new Set<string>();
-    return new Set(
-      (userSubscriptions as any[]).map((s: any) =>
-        s.planName?.toLowerCase() || ""
-      )
+  const lifecycle = async (sub: ApiSubscription, action: "pause" | "resume" | "cancel") => {
+    const fn = action === "pause" ? pauseSubscription : action === "resume" ? resumeSubscription : cancelSubscription;
+    const name = sub.plan?.name ?? `plan #${sub.planId}`;
+    const result = await tx.run(
+      {
+        title: `${action[0].toUpperCase()}${action.slice(1)} subscription`,
+        description: `${name} (subscription #${sub.onChainSubId}).`,
+        successTitle: `Subscription ${action === "cancel" ? "cancelled" : action === "pause" ? "paused" : "resumed"}`,
+      },
+      ({ config, address: addr, sign }) => fn(config, { subscriber: addr, subId: BigInt(sub.onChainSubId) }, { sign }),
     );
-  }, [userSubscriptions]);
-
-  // Map on-chain plans for lookup
-  const onChainPlanMap = useMemo(() => {
-    if (!subscriptionPlans) return new Map<string, number>();
-    const m = new Map<string, number>();
-    (subscriptionPlans as any[]).forEach((p: any, i: number) => {
-      m.set(p.name?.toLowerCase(), Number(p.planId ?? i));
-    });
-    return m;
-  }, [subscriptionPlans]);
-
-  // User subscription status lookup
-  const userSubStatus = useMemo(() => {
-    if (!userSubscriptions) return new Map<string, boolean>();
-    const m = new Map<string, boolean>();
-    (userSubscriptions as any[]).forEach((s: any) => {
-      m.set(s.planName?.toLowerCase(), s.active);
-    });
-    return m;
-  }, [userSubscriptions]);
-
-  const monthlyOutflow = useMemo(() => {
-    if (!userSubscriptions) return 0;
-    return (userSubscriptions as any[]).reduce(
-      (sum: number, s: any) => sum + Number(s.fee || 0n) / 1e18,
-      0
-    );
-  }, [userSubscriptions]);
-
-  const filteredChannels = useMemo(() => {
-    return subscriptionChannels.filter((ch) => {
-      const matchesCategory =
-        categoryFilter === "all" || ch.category === categoryFilter;
-      const matchesSearch =
-        !searchQuery ||
-        ch.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [categoryFilter, searchQuery]);
-
-  const handleChannelClick = (channel: CatalogChannel) => {
-    if (isWrongNetwork) {
-      showToast(
-        "error",
-        "Wrong Network",
-        "Please switch to Arbitrum Sepolia."
-      );
-      return;
-    }
-    setSelectedChannel(channel);
-    setPlanModalOpen(true);
-  };
-
-  const handleSelectTier = (channel: CatalogChannel, tier: SubscriptionPlanTier) => {
-    setPlanModalOpen(false);
-
-    if (!hasVirtualCard) {
-      setPendingSubscribe({ channel, tier });
-      setCardModalOpen(true);
-      return;
-    }
-
-    doSubscribe(channel, tier);
-  };
-
-  const doSubscribe = async (channel: CatalogChannel, tier: SubscriptionPlanTier) => {
-    if (!address) {
-      showToast("error", "No Wallet", "Please connect your wallet.");
-      return;
-    }
-
-    setLoadingId(tier.id);
-    try {
-      // Find the on-chain plan that matches this tier
-      const planId = onChainPlanMap.get(tier.id);
-      if (planId === undefined) {
-        showToast(
-          "error",
-          "Plan Not Found",
-          `"${tier.name}" plan not found on-chain. Admin must add it first.`
-        );
-        setLoadingId(null);
-        return;
-      }
-
-      const email = `user@rubbi.finance`;
-      const password = "rubbi-sub";
-      await startSubscription(planId, email, password);
-
-      showToast(
-        "success",
-        "Subscribed!",
-        `You're now subscribed to ${channel.name} ${tier.name}.`
-      );
-      refetchSubs();
-      refetchPlans();
-    } catch (err: any) {
-      showToast("error", "Subscription Failed", err.message || "Transaction failed.");
-    } finally {
-      setLoadingId(null);
-    }
-  };
-
-  const handlePauseResume = async (
-    planName: string,
-    isActive: boolean
-  ) => {
-    if (isWrongNetwork) {
-      showToast("error", "Wrong Network", "Switch to Arbitrum Sepolia.");
-      return;
-    }
-    setLoadingId(planName);
-    try {
-      const planId = onChainPlanMap.get(planName.toLowerCase());
-      if (planId === undefined) {
-        showToast("error", "Plan Not Found", "Could not find on-chain plan ID.");
-        setLoadingId(null);
-        return;
-      }
-
-      if (isActive) {
-        await pauseSubscription(planId);
-        showToast("info", "Paused", `${planName} subscription paused.`);
-      } else {
-        await resumeSubscription(planId);
-        showToast("success", "Resumed", `${planName} subscription resumed.`);
-      }
-      refetchSubs();
-    } catch (err: any) {
-      showToast("error", "Action Failed", err.message || "Transaction failed.");
-    } finally {
-      setLoadingId(null);
-    }
-  };
-
-  const onCardComplete = () => {
-    if (pendingSubscribe) {
-      doSubscribe(pendingSubscribe.channel, pendingSubscribe.tier);
-      setPendingSubscribe(null);
-    }
+    if (result) invalidate([["subscriptions", address]]);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-6 text-white mb-6">
-        <h1 className="text-2xl lg:text-3xl font-extrabold">Subscriptions</h1>
-        <p className="text-sm text-white/70 mt-1">Manage your streaming and service subscriptions</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-md transition-all duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-              <Check size={18} className="text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">Active</p>
-              <p className="text-2xl font-extrabold text-neutral-900">
-                {userSubscriptions
-                  ? (userSubscriptions as any[]).filter((s: any) => s.active).length
-                  : 0}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-md transition-all duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-              <DollarSign size={18} className="text-orange-600" />
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">Monthly Outflow</p>
-              <p className="text-2xl font-extrabold text-neutral-900">
-                {monthlyOutflow.toFixed(2)} RUB
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-md transition-all duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-              <Tv size={18} className="text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">Available Plans</p>
-              <p className="text-2xl font-extrabold text-neutral-900">
-                {subscriptionChannels.length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Empty state for no subscriptions */}
-      {(!userSubscriptions || (userSubscriptions as any[]).length === 0) && (
-        <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <CreditCard size={24} className="text-primary" />
-          </div>
-          <h3 className="text-lg font-extrabold text-neutral-900">No Active Subscriptions</h3>
-          <p className="text-sm text-neutral-500 mt-2 max-w-md mx-auto">
-            You haven't subscribed to any channels yet. Browse the catalog below to find streaming services, tools, and platforms to subscribe to.
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-extrabold text-neutral-900">Subscriptions</h1>
+          <p className="text-sm text-neutral-500 mt-1">
+            Plans curated by Rubbi&apos;s merchants. Funds stay in your wallet; you approve an allowance and each period is
+            pulled when due.
           </p>
         </div>
-      )}
-
-      {/* Active Subscriptions */}
-      {userSubscriptions && (userSubscriptions as any[]).length > 0 && (
-        <div>
-          <h2 className="text-lg font-bold text-neutral-900 mb-3">
-            Your Subscriptions
-          </h2>
-          <div className="space-y-3">
-            {(userSubscriptions as any[]).map((sub: any, i: number) => {
-              const name = sub.planName || "Unknown";
-              const fee = Number(sub.fee || 0n) / 1e18;
-              const isActive = sub.active;
-              return (
-                <div
-                  key={i}
-                  className="bg-white rounded-xl border border-neutral-200 p-5 flex items-center justify-between hover:shadow-md transition-all duration-200"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <CreditCard size={22} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-neutral-900">{name}</p>
-                      <p className="text-xs text-neutral-500">
-                        {fee.toFixed(2)} RUB/mo
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${
-                        isActive
-                          ? "bg-green-100 text-green-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {isActive ? "Active" : "Paused"}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant={isActive ? "outlined" : "primary"}
-                      loading={loadingId === name.toLowerCase()}
-                      onClick={() => handlePauseResume(name, isActive)}
-                      icon={
-                        isActive ? (
-                          <Pause size={12} />
-                        ) : (
-                          <Play size={12} />
-                        )
-                      }
-                    >
-                      {isActive ? "Pause" : "Resume"}
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Browse Catalog */}
-      <div className="border-t border-neutral-200 pt-6">
-        <h2 className="text-lg font-bold text-neutral-900 mb-3">
-          Browse Channels
-        </h2>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
-            />
-            <input
-              type="text"
-              placeholder="Search channels..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-primary transition-all"
-            />
-          </div>
-          {Object.entries(categoryLabels).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setCategoryFilter(key)}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                categoryFilter === key
-                  ? "bg-primary text-white"
-                  : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Channel Grid */}
-        {isLoadingPlans ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 size={24} className="text-primary animate-spin" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredChannels.map((channel) => {
-              const lowestPrice = Math.min(
-                ...channel.tiers.map((t) => t.priceUsd)
-              );
-              const highestPrice = Math.max(
-                ...channel.tiers.map((t) => t.priceUsd)
-              );
-              const lowestRub = Math.min(
-                ...channel.tiers.map((t) => t.priceRub)
-              );
-
-              return (
-                <button
-                  key={channel.id}
-                  type="button"
-                  onClick={() => handleChannelClick(channel)}
-                  className="text-left bg-white rounded-xl border border-neutral-200 p-4 hover:border-primary/40 hover:shadow-md hover:scale-[1.02] transition-all duration-200 group"
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-neutral-100 flex items-center justify-center shrink-0">
-                      <Image
-                        src={channel.logo}
-                        alt={`${channel.name} logo`}
-                        width={40}
-                        height={40}
-                        className="object-contain"
-                      />
-                    </div>
-                    <div>
-                      <p className="font-bold text-neutral-900 group-hover:text-primary transition-colors">
-                        {channel.name}
-                      </p>
-                      <p className="text-[10px] text-neutral-400 uppercase tracking-wider">
-                        {categoryLabels[channel.category] || channel.category}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-lg font-extrabold text-neutral-900">
-                      ${lowestPrice.toFixed(2)}
-                    </span>
-                    {lowestPrice !== highestPrice && (
-                      <span className="text-xs text-neutral-400">
-                        - ${highestPrice.toFixed(2)}
-                      </span>
-                    )}
-                    <span className="text-xs text-neutral-400">/mo</span>
-                  </div>
-                  <p className="text-xs text-primary font-semibold mt-1">
-                    From {lowestRub.toLocaleString()} RUB/mo
-                  </p>
-                  <div className="flex items-center gap-1 mt-2">
-                    <span className="text-[10px] px-2 py-0.5 bg-neutral-100 text-neutral-500 rounded-full">
-                      {channel.tiers.length} plan
-                      {channel.tiers.length > 1 ? "s" : ""}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <Button variant="ghost" size="sm" icon={<RefreshCw size={13} />} onClick={() => { void plans.refetch(); void subs.refetch(); }}>
+          Refresh
+        </Button>
       </div>
 
-      {/* Modals */}
-      <VirtualCardModal
-        open={cardModalOpen}
-        onClose={() => {
-          setCardModalOpen(false);
-          setPendingSubscribe(null);
-        }}
-        onComplete={onCardComplete}
-      />
+      <SectionCard title="My subscriptions" subtitle="Mirrored from the subscriptions contract by Rubbi's indexer">
+        {subs.isError && <p className="text-sm text-red-600">{apiErrorMessage(subs.error)}</p>}
+        {subs.data && subs.data.length === 0 && <EmptyState title="No subscriptions yet">Pick a plan below to subscribe.</EmptyState>}
+        {subs.data && subs.data.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left">
+              <thead className="bg-neutral-50 border-b border-neutral-100">
+                <tr>
+                  {["Plan", "Amount", "Status", "Next due", "Allowance", "Actions"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-[11px] font-semibold uppercase tracking-widest text-primary-500">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {subs.data.map((sub) => (
+                  <tr key={sub.id} className="hover:bg-neutral-50/70 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-bold text-neutral-900">{sub.plan?.name ?? `Plan #${sub.planId}`}</p>
+                      <p className="text-[11px] text-neutral-400">#{sub.onChainSubId} · merchant {sub.plan ? shortAddress(sub.plan.merchant) : "—"}</p>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-neutral-700">
+                      {sub.plan ? `${formatUsdcDecimal(sub.plan.amount)} USDC ${formatPeriod(sub.plan.period)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3"><StatusPill status={sub.status} /></td>
+                    <td className="px-4 py-3 text-sm text-neutral-600">{sub.status === "CANCELLED" ? "—" : formatDate(sub.nextDueAt)}</td>
+                    <td className="px-4 py-3">
+                      {sub.status === "CANCELLED" ? <span className="text-[11px] text-neutral-400">—</span> : <AllowanceStatus plan={sub.plan} />}
+                      {sub.status !== "CANCELLED" && sub.plan && (
+                        <button className="block text-[11px] text-primary hover:underline mt-0.5" onClick={() => setModal({ plan: sub.plan!, approveOnly: true })}>
+                          Top up allowance
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1.5">
+                        {(sub.status === "ACTIVE" || sub.status === "PAST_DUE") && (
+                          <Button size="sm" variant="outlined" icon={<Pause size={12} />} disabled={tx.isRunning} onClick={() => lifecycle(sub, "pause")}>
+                            Pause
+                          </Button>
+                        )}
+                        {sub.status === "PAUSED" && (
+                          <Button size="sm" icon={<Play size={12} />} disabled={tx.isRunning} onClick={() => lifecycle(sub, "resume")}>
+                            Resume
+                          </Button>
+                        )}
+                        {sub.status !== "CANCELLED" && (
+                          <Button size="sm" variant="danger" icon={<XCircle size={12} />} disabled={tx.isRunning} onClick={() => lifecycle(sub, "cancel")}>
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
 
-      <SubscriptionPlanModal
-        open={planModalOpen}
-        onClose={() => {
-          setPlanModalOpen(false);
-          setSelectedChannel(null);
-        }}
-        channel={selectedChannel}
-        onSelectTier={handleSelectTier}
-        loading={isSubscribing}
-      />
+      <SectionCard title="Available plans" subtitle="Public plans mirrored from the subscriptions contract">
+        {plans.isLoading && <p className="text-sm text-neutral-400">Loading plans…</p>}
+        {plans.isError && <p className="text-sm text-red-600">{apiErrorMessage(plans.error)}</p>}
+        {plans.data && plans.data.length === 0 && (
+          <EmptyState title="No plans published yet">Merchants create plans on-chain; they appear here once indexed.</EmptyState>
+        )}
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {plans.data?.map((plan) => {
+            const live = liveByPlan.get(plan.id);
+            return (
+              <div key={plan.id} className="rounded-2xl border border-neutral-200 p-5 flex flex-col gap-3">
+                <div>
+                  <p className="text-base font-extrabold text-neutral-900">{plan.name}</p>
+                  <p className="text-xs text-neutral-400">Plan #{plan.id} · merchant {shortAddress(plan.merchant)}</p>
+                </div>
+                <p className="text-2xl font-extrabold text-primary">
+                  {formatUsdcDecimal(plan.amount)} <span className="text-xs font-bold text-neutral-400">USDC {formatPeriod(plan.period)}</span>
+                </p>
+                {live ? (
+                  <div className="flex items-center gap-2 text-xs text-neutral-500">
+                    <StatusPill status={live.status} /> already subscribed
+                  </div>
+                ) : (
+                  <Button icon={<Plus size={14} />} disabled={!plan.active || tx.isRunning} onClick={() => setModal({ plan, approveOnly: false })}>
+                    {plan.active ? "Subscribe" : "Inactive"}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </SectionCard>
+
+      {modal && <SubscribeModal plan={modal.plan} approveOnly={modal.approveOnly} onClose={() => setModal(null)} />}
     </div>
   );
 }

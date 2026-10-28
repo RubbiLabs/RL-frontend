@@ -3,8 +3,8 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "Rubbi — Decentralized Financial Automation on Arbitrum",
-  description: "Automate subscriptions, stream salaries, and manage digital assets on Arbitrum from a single, secure ledger.",
+  title: "Rubbi — Payment automation on Stellar",
+  description: "Fund a USDC balance, pay subscriptions, run payroll and spend through a virtual card, all on Stellar.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "48x48" },

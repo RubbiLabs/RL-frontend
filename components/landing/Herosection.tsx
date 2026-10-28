@@ -2,19 +2,16 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, Shield, Wallet, Zap, ArrowUpRight, Repeat } from "lucide-react";
-import { useWallet } from "@/context/WalletContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
 import Button from "@/components/ui/Button";
+import TestnetNotice from "@/components/landing/TestnetNotice";
 
 export default function HeroSection() {
   const router = useRouter();
-  const { isConnected, isConnecting } = useWallet();
+  const { isSignedIn, isConnecting } = useStellarWallet();
 
   const handleConnect = async () => {
-    if (isConnected) {
-      router.push("/dashboard");
-      return;
-    }
-    router.push("/onboarding");
+    router.push(isSignedIn ? "/dashboard" : "/onboarding");
   };
 
   return (
@@ -34,7 +31,7 @@ export default function HeroSection() {
           {/* Eyebrow */}
           <div className="inline-flex items-center gap-2 bg-primary/8 text-primary text-[11px] font-bold px-3.5 py-1.5 rounded-full mb-7 animate-fadeIn tracking-widest uppercase">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            Built on Arbitrum
+            Built on Stellar · Testnet preview
           </div>
 
           {/* Headline */}
@@ -46,7 +43,7 @@ export default function HeroSection() {
 
           {/* Subheadline */}
           <p className="text-base lg:text-lg text-neutral-500 leading-relaxed max-w-xl mb-10">
-            Subscribe to streaming services, stream salaries, and swap tokens — all gasless, all on-chain, all from one dashboard.
+            Hold USDC in a Rubbi wallet on Stellar, load it onto a virtual card, pay recurring subscriptions from your own wallet and run payroll from an escrow — all signed with your own Stellar wallet.
           </p>
 
           {/* CTA Buttons */}
@@ -57,26 +54,28 @@ export default function HeroSection() {
               loading={isConnecting}
               onClick={handleConnect}
             >
-              {isConnected ? "Go to Dashboard" : "Begin Automation"}
+              {isSignedIn ? "Go to Dashboard" : "Get Started"}
             </Button>
 
           </div>
 
-          {/* Trust badges */}
-          <div className="flex items-center gap-6 text-neutral-400">
+          {/* Facts */}
+          <div className="flex flex-wrap items-center gap-6 text-neutral-400 mb-8">
             <div className="flex items-center gap-2">
               <Shield size={14} />
-              <span className="text-xs font-semibold">Gasless Transactions</span>
+              <span className="text-xs font-semibold">Subscriptions pull from a bounded allowance you set</span>
             </div>
             <div className="flex items-center gap-2">
               <Zap size={14} />
-              <span className="text-xs font-semibold">Instant Settlement</span>
+              <span className="text-xs font-semibold">Stellar ledgers close in about 5 seconds</span>
             </div>
             <div className="flex items-center gap-2">
               <CreditCard size={14} />
-              <span className="text-xs font-semibold">Virtual Cards</span>
+              <span className="text-xs font-semibold">Virtual card (mock issuer on testnet)</span>
             </div>
           </div>
+
+          <TestnetNotice className="max-w-xl" />
         </div>
 
         {/* Right animated scene */}
@@ -84,11 +83,11 @@ export default function HeroSection() {
           {/* Virtual Card */}
           <div className="relative bg-primary rounded-[28px] p-6 text-white card-shine aspect-[1.586/1] animate-floatSlow shadow-[0_22px_60px_rgba(34,87,122,0.3)] max-w-[380px] ml-auto">
             <div className="flex items-center justify-between mb-6">
-              <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-white/55">Rubbi Virtual Card</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-white/55">Rubbi Virtual Card · Mock</p>
               <CreditCard size={18} className="text-white/70" />
             </div>
             <div className="w-8 h-8 rounded-lg bg-[#EBCB7B] mb-7" />
-            <p className="font-mono tracking-[0.28em] text-sm mb-7">5234 1988 2400 6721</p>
+            <p className="font-mono tracking-[0.28em] text-sm mb-7">•••• •••• •••• 6721</p>
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-[9px] text-white/45 uppercase tracking-[0.28em] mb-1">Holder</p>
@@ -104,38 +103,38 @@ export default function HeroSection() {
           {/* Floating notification - Subscription */}
           <div className="absolute -left-4 top-[220px] rounded-2xl bg-white border border-neutral-200 px-4 py-3 shadow-xl animate-floatReverse z-10">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-red-500 flex items-center justify-center overflow-hidden">
-                <img src="/subscriptions/netflix.svg" alt="Netflix" className="w-6 h-6 object-contain" />
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden">
+                <Repeat size={16} className="text-primary" />
               </div>
               <div>
-                <p className="text-sm font-bold text-neutral-900">Netflix Premium</p>
-                <p className="text-xs text-green-600 font-semibold">Active Subscription</p>
+                <p className="text-sm font-bold text-neutral-900">Monthly subscription</p>
+                <p className="text-xs text-green-600 font-semibold">Charged 12.00 USDC · Active</p>
               </div>
             </div>
           </div>
 
-          {/* Floating notification - Swap */}
+          {/* Floating notification - Card load */}
           <div className="absolute right-0 bottom-[60px] rounded-2xl bg-neutral-950 text-white px-4 py-3 shadow-xl animate-floatSlow z-10">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
                 <Repeat size={16} className="text-white" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/45">Swap Complete</p>
-                <p className="text-sm font-semibold">1.5 ETH → 2,400 RUB</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/45">Card loaded</p>
+                <p className="text-sm font-semibold">+50.00 USDC on card</p>
               </div>
             </div>
           </div>
 
-          {/* Floating notification - Salary */}
+          {/* Floating notification - Payroll */}
           <div className="absolute left-8 bottom-[-10px] rounded-2xl bg-primary text-white px-4 py-3 shadow-xl animate-driftSideways z-10">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-white/12 flex items-center justify-center">
                 <ArrowUpRight size={16} />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/55">Salary Stream</p>
-                <p className="text-sm font-semibold">+245 RUB settled</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/55">Payroll</p>
+                <p className="text-sm font-semibold">+245.00 USDC paid out</p>
               </div>
             </div>
           </div>
