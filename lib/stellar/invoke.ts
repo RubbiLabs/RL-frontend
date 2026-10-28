@@ -67,6 +67,28 @@ export function walletErrorToTxError(error: unknown): StellarTxError {
   return new StellarTxError("rejected", `The wallet could not sign the transaction: ${message}`, { raw: message });
 }
 
+export const WALLET_ACCESS_MESSAGE =
+  "Rubbi needs permission to connect to your wallet. Approve the connection in Freighter and try again.";
+
+/** Freighter reports a missing grant as "not allowed, please request access first" (kit module, code -3). */
+const ACCESS_NOT_GRANTED = /not allowed|request access/i;
+
+/**
+ * Maps an error from the wallet's access request (Freighter `requestAccess`,
+ * run by the kit module's `getAddress` without `skipRequestAccess`) to a
+ * `StellarTxError`. Freighter uses the same text for a declined access request
+ * as for a declined signature ("The user rejected this request.", code -4), so
+ * in this context a rejection means the site has no permission yet.
+ */
+export function walletAccessErrorToTxError(error: unknown): StellarTxError {
+  const mapped = walletErrorToTxError(error);
+  const raw = mapped.details.raw ?? mapped.message;
+  if (USER_REJECTED.test(raw) || ACCESS_NOT_GRANTED.test(raw)) {
+    return new StellarTxError("rejected", WALLET_ACCESS_MESSAGE, { raw });
+  }
+  return new StellarTxError("rejected", `Could not connect to the wallet: ${raw}`, { raw });
+}
+
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;

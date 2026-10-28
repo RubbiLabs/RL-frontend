@@ -8,6 +8,13 @@ import type { KitEventType as KitEventTypeEnum, Networks as NetworksEnum } from 
 
 export type Kit = typeof KitClass;
 
+/**
+ * `productId` of the kit's Freighter module (`FREIGHTER_ID` in
+ * `@creit-tech/stellar-wallets-kit/modules/freighter`). Kept as a literal so
+ * the module, which touches `window` on import, stays lazily loaded.
+ */
+export const FREIGHTER_MODULE_ID = "freighter";
+
 export interface LoadedKit {
   kit: Kit;
   KitEventType: typeof KitEventTypeEnum;
