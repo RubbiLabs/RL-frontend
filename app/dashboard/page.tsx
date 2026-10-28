@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, Calendar, CreditCard, RefreshCw, Users, Wallet } from "lucide-react";
 
 import StatsCard from "@/components/dashboard/StatsCard";
+import AllowanceHealthBanner from "@/components/subscriptions/AllowanceHealthBanner";
 import SectionCard, { EmptyState, formatDate } from "@/components/ui/SectionCard";
 import { useStellarWallet } from "@/context/StellarWalletContext";
 import { useDashboardStats } from "@/hooks/useApi";
@@ -85,6 +86,8 @@ export default function DashboardPage() {
       {stats.isError && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{apiErrorMessage(stats.error)}</div>
       )}
+
+      <AllowanceHealthBanner />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatsCard

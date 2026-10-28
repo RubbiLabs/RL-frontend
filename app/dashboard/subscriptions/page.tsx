@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { Pause, Play, Plus, RefreshCw, XCircle } from "lucide-react";
 
+import AllowanceHealthBanner from "@/components/subscriptions/AllowanceHealthBanner";
 import AllowanceStatus from "@/components/subscriptions/AllowanceStatus";
 import SubscribeModal from "@/components/subscriptions/SubscribeModal";
 import Button from "@/components/ui/Button";
@@ -60,6 +61,8 @@ export default function SubscriptionsPage() {
         </Button>
       </div>
 
+      <AllowanceHealthBanner />
+
       <SectionCard title="My subscriptions" subtitle="Mirrored from the subscriptions contract by Rubbi's indexer">
         {subs.isError && <p className="text-sm text-red-600">{apiErrorMessage(subs.error)}</p>}
         {subs.data && subs.data.length === 0 && <EmptyState title="No subscriptions yet">Pick a plan below to subscribe.</EmptyState>}
@@ -88,7 +91,11 @@ export default function SubscriptionsPage() {
                     <td className="px-4 py-3"><StatusPill status={sub.status} /></td>
                     <td className="px-4 py-3 text-sm text-neutral-600">{sub.status === "CANCELLED" ? "—" : formatDate(sub.nextDueAt)}</td>
                     <td className="px-4 py-3">
-                      {sub.status === "CANCELLED" ? <span className="text-[11px] text-neutral-400">—</span> : <AllowanceStatus plan={sub.plan} />}
+                      {sub.status === "CANCELLED" ? (
+                        <span className="text-[11px] text-neutral-400">—</span>
+                      ) : (
+                        <AllowanceStatus plan={sub.plan} subscription={sub} allSubscriptions={subs.data} />
+                      )}
                       {sub.status !== "CANCELLED" && sub.plan && (
                         <button className="block text-[11px] text-primary hover:underline mt-0.5" onClick={() => setModal({ plan: sub.plan!, approveOnly: true })}>
                           Top up allowance
@@ -155,7 +162,14 @@ export default function SubscriptionsPage() {
         </div>
       </SectionCard>
 
-      {modal && <SubscribeModal plan={modal.plan} approveOnly={modal.approveOnly} onClose={() => setModal(null)} />}
+      {modal && (
+        <SubscribeModal
+          plan={modal.plan}
+          approveOnly={modal.approveOnly}
+          sharedSubscriptions={subs.data}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   );
 }
