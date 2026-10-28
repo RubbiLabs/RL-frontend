@@ -3,15 +3,19 @@
  * Checks lib/stellar/errors.ts against the contracts' errors.rs files.
  *
  * Usage: node scripts/check-contract-errors.mjs [path/to/RL-smart-contracts]
- * Defaults to ../RL-smart-contracts. Exits 0 with a notice when the contracts
- * repo is not present (CI of the frontend alone), 1 on any drift.
+ * Defaults to ../RL-smart-contracts. Exits 0 with a notice when the default
+ * sibling repo is not present (local checkout without ../RL-smart-contracts),
+ * and exits 1 when an explicit path argument is missing or on any drift.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const contractsRoot = resolve(process.argv[2] ?? resolve(here, "..", "..", "RL-smart-contracts"));
+const explicitContractsArg = process.argv[2];
+const contractsRoot = resolve(
+  explicitContractsArg ?? resolve(here, "..", "..", "RL-smart-contracts"),
+);
 const errorsTs = readFileSync(resolve(here, "..", "lib", "stellar", "errors.ts"), "utf8");
 
 const CONTRACTS = {
@@ -42,6 +46,10 @@ function parseTs(constName) {
 }
 
 if (!existsSync(contractsRoot)) {
+  if (explicitContractsArg !== undefined) {
+    console.error(`check-contract-errors: contracts repo not found at ${contractsRoot}`);
+    process.exit(1);
+  }
   console.log(`check-contract-errors: contracts repo not found at ${contractsRoot}; skipping`);
   process.exit(0);
 }

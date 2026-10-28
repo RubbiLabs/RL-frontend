@@ -36,8 +36,10 @@ Run every check before you push; CI runs the same list:
 npm run lint
 npm run type-check
 npm run build
-npm run check:errors                      # lib/stellar/errors.ts == contracts' errors.rs (skips without ../RL-smart-contracts)
+npm run check:errors                      # lib/stellar/errors.ts == contracts' errors.rs (skips without ../RL-smart-contracts; pass an explicit path to enforce)
 ```
+
+In CI (`.github/workflows/ci.yml`), `RubbiLabs/RL-smart-contracts` is checked out into `contracts` at the ref pinned by `CONTRACTS_REF` (`vars.CONTRACTS_REF || 'main'`) and verified with `node scripts/check-contract-errors.mjs contracts`. When contract error enums change in `RL-smart-contracts`, update `lib/stellar/errors.ts` and bump `CONTRACTS_REF` in `.github/workflows/ci.yml` (or set the `CONTRACTS_REF` repository variable in GitHub settings).
 
 This is a **Next.js 16** project with breaking changes from earlier majors.
 Read `AGENTS.md` and the relevant guide in `node_modules/next/dist/docs/`
